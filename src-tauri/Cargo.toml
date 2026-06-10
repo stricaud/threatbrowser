@@ -1,0 +1,29 @@
+[package]
+name = "threatbrowser"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "threatbrowser_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "threatbrowser"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri    = { version = "2", features = [] }
+serde    = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
+
+
+[profile.release]
+lto      = true
+opt-level = "s"

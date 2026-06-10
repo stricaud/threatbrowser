@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import re
+import sys
 import threading
 from contextlib import asynccontextmanager
 import concurrent.futures
@@ -36,7 +37,8 @@ log = logging.getLogger(__name__)
 # chain intentionally lets httpx fail (403/timeout) before trying curl-cffi/Playwright.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-_HERE = os.path.abspath(os.path.dirname(__file__))
+# When bundled by PyInstaller (--onefile), files are extracted to sys._MEIPASS.
+_HERE = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
 CACHE_DIR = os.environ.get("TB_CACHE", os.path.join(_HERE, "cache"))
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -1591,7 +1593,7 @@ def get_favicon(domain: str = Query(...)):
 
 # ── Static ────────────────────────────────────────────────────────────────────
 
-_static = os.path.join(_HERE, "static")
+_static = os.environ.get("TB_STATIC", os.path.join(_HERE, "static"))
 app.mount("/static", StaticFiles(directory=_static), name="static")
 
 
@@ -1602,4 +1604,4 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=7474, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=7474, reload=False)
