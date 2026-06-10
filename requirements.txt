@@ -1,0 +1,11 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+feedparser>=6.0
+requests>=2.31
+beautifulsoup4>=4.12
+html2text>=2020.1.16
+pymisp>=2.4
+brotli>=1.0
+httpx[http2]>=0.24
+playwright>=1.40
+curl-cffi>=0.7

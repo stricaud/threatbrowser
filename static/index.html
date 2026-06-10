@@ -1,0 +1,2626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ThreatBrowser</title>
+<link rel="icon" href="data:,">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #0d1117; --bg2: #161b22; --bg3: #21262d;
+  --border:   #30363d; --text: #c9d1d9; --dim: #8b949e;
+  --blue:     #58a6ff; --green: #3fb950; --orange: #d29922;
+  --red:      #f85149; --mono: 'SF Mono','Fira Code',monospace;
+  --radius:   6px;
+}
+body { background:var(--bg); color:var(--text); font-family:var(--mono); font-size:13px; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+/* ── Top bar ── */
+#topbar { background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; padding:7px 12px; flex-shrink:0; flex-wrap:wrap; }
+#topbar h1 { font-size:14px; color:var(--blue); white-space:nowrap; }
+.tab-group { display:flex; gap:2px; background:var(--bg3); border-radius:var(--radius); padding:2px; }
+.tab { padding:3px 11px; border-radius:4px; cursor:pointer; color:var(--dim); font-size:12px; border:none; background:none; font-family:var(--mono); white-space:nowrap; }
+.tab:hover { color:var(--text); }
+.tab.active { background:var(--bg2); color:var(--text); }
+.since-group { display:flex; gap:2px; }
+.since-btn { padding:2px 8px; border-radius:4px; cursor:pointer; color:var(--dim); font-size:11px; border:1px solid transparent; background:none; font-family:var(--mono); }
+.since-btn:hover { color:var(--text); }
+.since-btn.active { border-color:var(--border); color:var(--text); background:var(--bg3); }
+#search { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:4px 10px; font-family:var(--mono); font-size:12px; width:200px; }
+#search:focus { outline:none; border-color:var(--blue); }
+.spacer { flex:1; }
+#stats-bar { color:var(--dim); font-size:11px; white-space:nowrap; }
+.btn { padding:4px 11px; border-radius:var(--radius); border:1px solid var(--border); background:var(--bg3); color:var(--text); cursor:pointer; font-family:var(--mono); font-size:12px; white-space:nowrap; }
+.btn:hover { border-color:var(--blue); color:var(--blue); }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+.btn-primary { background:#1f6feb; border-color:#1f6feb; color:#fff; }
+.btn-primary:hover { background:#388bfd; border-color:#388bfd; color:#fff; }
+.icon-btn { background:none; border:none; cursor:pointer; color:var(--dim); font-size:15px; padding:2px 5px; border-radius:3px; line-height:1; font-family:var(--mono); }
+.icon-btn:hover { color:var(--blue); background:var(--bg3); }
+
+/* ── Main ── */
+#main { display:flex; flex:1; overflow:hidden; }
+
+/* ── Sidebar ── */
+#sidebar { width:200px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; background:var(--bg2); }
+#sidebar-head { padding:8px 10px 5px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+#sidebar-head span { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+#source-list { flex:1; overflow-y:auto; padding:4px 0; }
+.src { display:flex; align-items:center; gap:5px; padding:3px 10px; cursor:pointer; border-left:2px solid transparent; }
+.src:hover { background:var(--bg3); }
+.src.on { border-left-color:var(--blue); background:rgba(88,166,255,.06); }
+.src input[type=checkbox] { accent-color:var(--blue); flex-shrink:0; }
+.src-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dim); font-size:11px; }
+.src-del, .src-edit { display:none; background:none; border:none; cursor:pointer; color:var(--dim); font-size:12px; padding:0 2px; line-height:1; border-radius:2px; flex-shrink:0; }
+.src:hover .src-del, .src:hover .src-edit { display:block; }
+.src-del:hover { color:var(--red); background:rgba(248,81,73,.1); }
+.src-edit:hover { color:var(--blue); background:rgba(88,166,255,.1); }
+.src-spinner { display:inline-block; width:8px; height:8px; border:1.5px solid var(--blue); border-top-color:transparent; border-radius:50%; animation:spin 0.6s linear infinite; flex-shrink:0; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#sidebar-foot { padding:8px 10px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:5px; }
+
+/* ── Content + Preview ── */
+#content-wrap { flex:1; display:flex; overflow:hidden; position:relative; }
+#article-area { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+
+/* ── Table ── */
+#table-wrap { flex:1; overflow-y:auto; }
+table { width:100%; border-collapse:collapse; table-layout:fixed; }
+thead th { background:var(--bg2); border-bottom:1px solid var(--border); padding:6px 8px; text-align:left; font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; position:sticky; top:0; z-index:1; white-space:nowrap; }
+tbody tr { border-bottom:1px solid rgba(48,54,61,.4); }
+tbody tr:hover { background:rgba(33,38,45,.6); }
+tbody tr.selected { background:rgba(88,166,255,.06); }
+tbody tr.previewing { background:rgba(88,166,255,.1); }
+tbody tr.fresh { background:rgba(63,185,80,.07); }
+tbody tr.fresh:hover { background:rgba(63,185,80,.13); }
+td { padding:5px 8px; vertical-align:middle; }
+td.cb, th.cb { width:28px; }
+td.dt, th.dt { width:85px; }
+td.st, th.st { width:90px; }
+td.act, th.act { width:50px; }
+td.ttl { overflow:hidden; }
+td.ttl .title-link { color:var(--text); text-decoration:none; display:flex; align-items:center; gap:5px; cursor:pointer; overflow:hidden; }
+td.ttl .title-link:hover { color:var(--blue); }
+td.ttl .title-link:hover .title-text { color:var(--blue); }
+.title-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.src-favicon { width:14px; height:14px; border-radius:2px; flex-shrink:0; object-fit:contain; }
+.src-label { display:block; font-size:10px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; }
+td.dt { color:var(--dim); font-size:11px; white-space:nowrap; }
+.copy-btn { background:none; border:none; cursor:pointer; color:var(--dim); font-size:13px; padding:2px 4px; border-radius:3px; }
+.copy-btn:hover { color:var(--blue); background:var(--bg3); }
+.copy-btn.ok { color:var(--green); }
+.badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; padding:1px 6px; border-radius:10px; white-space:nowrap; }
+.badge::before { content:''; display:inline-block; width:5px; height:5px; border-radius:50%; }
+.badge.new { background:rgba(88,166,255,.12); color:var(--blue); }
+.badge.new::before { background:var(--blue); }
+.badge.seen { background:rgba(139,148,158,.12); color:var(--dim); }
+.badge.seen::before { background:var(--dim); }
+.badge.has_scenario { background:rgba(63,185,80,.12); color:var(--green); }
+.badge.has_scenario::before { background:var(--green); }
+.badge.dl-err { background:rgba(248,81,73,.12); color:var(--red); font-family:var(--mono); }
+.badge.dl-err::before { background:var(--red); }
+#empty { display:none; align-items:center; justify-content:center; height:200px; color:var(--dim); }
+
+/* ── Bottom bar ── */
+#bottombar { border-top:1px solid var(--border); background:var(--bg2); padding:6px 12px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+#sel-info { color:var(--dim); font-size:11px; min-width:90px; }
+.spacer2 { flex:1; }
+#fetch-progress { color:var(--dim); font-size:11px; }
+#pbar-wrap { height:2px; background:var(--border); border-radius:1px; margin-top:2px; display:none; }
+#pbar { height:2px; background:var(--blue); border-radius:1px; transition:width .3s; }
+#total-lbl { color:var(--dim); font-size:11px; }
+
+/* ── Preview panel ── */
+#preview { width:0; flex-shrink:0; overflow:hidden; border-left:1px solid transparent; background:var(--bg); display:flex; flex-direction:column; transition:width .2s ease; }
+#preview.open { width:50%; border-left-color:var(--border); }
+#preview-head { background:var(--bg2); border-bottom:1px solid var(--border); padding:7px 10px; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+#preview-src { color:var(--dim); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+#preview-body { flex:1; overflow-y:auto; padding:16px 18px; }
+#preview-body.loading { display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:12px; }
+/* markdown rendering */
+#md-content h1,#md-content h2,#md-content h3,#md-content h4 { margin:16px 0 8px; color:var(--text); }
+#md-content h1 { font-size:18px; } #md-content h2 { font-size:15px; } #md-content h3 { font-size:13px; }
+#md-content p { margin:8px 0; line-height:1.6; color:var(--text); }
+#md-content a { color:var(--blue); }
+#md-content img { max-width:100%; border-radius:4px; margin:8px 0; border:1px solid var(--border); }
+#md-content code { background:var(--bg3); padding:1px 5px; border-radius:3px; font-family:var(--mono); font-size:11px; }
+#md-content pre { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:10px; overflow-x:auto; margin:10px 0; }
+#md-content pre code { background:none; padding:0; }
+#md-content blockquote { border-left:3px solid var(--border); margin:8px 0; padding-left:12px; color:var(--dim); }
+#md-content ul,#md-content ol { margin:8px 0 8px 20px; line-height:1.6; }
+#md-content hr { border:none; border-top:1px solid var(--border); margin:16px 0; }
+#md-content strong { color:var(--text); }
+#preview-cached { font-size:10px; color:var(--dim); padding:4px 10px; border-top:1px solid var(--border); text-align:right; flex-shrink:0; }
+
+/* ── Filter panel (inside preview) ── */
+#filter-panel { background:var(--bg2); border-bottom:1px solid var(--border); padding:8px 10px; flex-shrink:0; display:none; }
+#filter-panel.open { display:block; }
+.filter-row { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.filter-row label { color:var(--dim); font-size:10px; text-transform:uppercase; width:38px; flex-shrink:0; }
+.filter-row input { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:3px 8px; font-family:var(--mono); font-size:11px; }
+.filter-row input:focus { outline:none; border-color:var(--blue); }
+.filter-row input.match { border-color:var(--green); }
+.filter-actions { display:flex; gap:6px; margin-top:6px; }
+#filter-pattern-row { display:flex; align-items:center; gap:6px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+#filter-pattern-row label { color:var(--dim); font-size:10px; text-transform:uppercase; width:50px; flex-shrink:0; }
+#filter-pattern { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:3px 8px; font-family:var(--mono); font-size:11px; }
+#filter-pattern:focus { outline:none; border-color:var(--blue); }
+#raw-view { display:none; }
+#raw-view pre { background:var(--bg3); padding:14px; border-radius:var(--radius); font-size:11px; color:var(--text); white-space:pre-wrap; word-break:break-word; line-height:1.5; }
+
+/* ── Rules table in settings ── */
+.rules-table { width:100%; border-collapse:collapse; margin-top:8px; font-size:11px; }
+.rules-table th { color:var(--dim); text-align:left; padding:4px 6px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; }
+.rules-table td { padding:4px 6px; border-bottom:1px solid rgba(48,54,61,.4); vertical-align:top; word-break:break-all; }
+.rules-table td.pat { color:var(--blue); width:35%; }
+.rules-table td.val { color:var(--text); font-size:10px; }
+.rules-table td.act { width:28px; text-align:right; }
+.rules-table .del-rule { background:none; border:none; cursor:pointer; color:var(--dim); font-size:13px; }
+.rules-table .del-rule:hover { color:var(--red); }
+
+/* ── Modals ── */
+.modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:100; align-items:center; justify-content:center; }
+.modal-bg.open { display:flex; }
+.modal { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:20px; width:460px; max-height:90vh; overflow-y:auto; }
+.modal h2 { font-size:14px; margin-bottom:14px; }
+.field { margin-bottom:10px; }
+.field label { display:block; font-size:11px; color:var(--dim); margin-bottom:3px; }
+.field input,.field select,.field textarea { width:100%; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:5px 9px; font-family:var(--mono); font-size:12px; }
+.field textarea { resize:vertical; height:60px; }
+.field input:focus,.field select:focus,.field textarea:focus { outline:none; border-color:var(--blue); }
+.field small { color:var(--dim); font-size:10px; margin-top:2px; display:block; }
+.modal-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.type-section { display:none; }
+.type-section.show { display:block; }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+
+/* ── Toast ── */
+#toast { position:fixed; bottom:55px; right:18px; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:7px 13px; color:var(--text); font-size:12px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:200; }
+#toast.show { opacity:1; }
+::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+/* ── Source wizard ── */
+.wiz-step { display:none; }
+.wiz-step.active { display:block; }
+.wiz-badge { display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:3px 11px;border-radius:10px;margin-bottom:10px;font-weight:normal; }
+.wiz-badge.rss  { background:rgba(63,185,80,.12); color:var(--green); border:1px solid rgba(63,185,80,.3); }
+.wiz-badge.html { background:rgba(88,166,255,.12); color:var(--blue);  border:1px solid rgba(88,166,255,.3); }
+.wiz-badge.unknown { background:rgba(210,153,34,.12); color:var(--orange); border:1px solid rgba(210,153,34,.3); }
+.wiz-notes { margin:4px 0 10px; display:flex; flex-direction:column; gap:3px; }
+.wiz-note { font-size:11px; color:var(--dim); }
+.wiz-note.ok   { color:var(--green); }
+.wiz-note.warn { color:var(--orange); }
+.wiz-articles { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:7px 10px; margin:8px 0 12px; max-height:130px; overflow-y:auto; }
+.wiz-art { font-size:11px; color:var(--dim); padding:3px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wiz-art:not(:last-child) { border-bottom:1px solid rgba(48,54,61,.35); }
+
+/* ── Adel syntax colors ── */
+.adel-comment   { color:#6e7681; font-style:italic; }
+.adel-str       { color:#a5d6ff; }
+.adel-str-triple{ color:#a5d6ff; }
+.adel-str-strict{ color:#ffa657; }
+.adel-variable  { color:#3fb950; }
+.adel-interp-p  { color:#ffa657; }
+.adel-kw-top    { color:#79c0ff; }
+.adel-kw-ctrl   { color:#ff7b72; }
+.adel-kw-decl   { color:#d2a8ff; }
+.adel-kw-act    { color:#d2a8ff; }
+.adel-entity    { color:#d2a8ff; font-style:italic; }
+.adel-builtin   { color:#79c0ff; }
+.adel-number    { color:#79c0ff; }
+.adel-operator  { color:#ff7b72; }
+.adel-directive { color:#d2a8ff; }
+.adel-directive-name { color:#ffa657; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>ThreatBrowser</h1>
+  <div class="tab-group" id="status-tabs">
+    <button class="tab active" data-status="all">All</button>
+    <button class="tab" data-status="new">New</button>
+    <button class="tab" data-status="seen">Seen</button>
+    <button class="tab" data-status="no_scenario" style="display:none;">No Scenario</button>
+    <button class="tab" data-status="has_scenario" style="display:none;">Has Scenario</button>
+    <button class="tab" data-status="dl_error" style="color:var(--red)">Errors</button>
+    <button class="tab" data-status="noisy" style="color:var(--dim)">Noisy</button>
+  </div>
+  <div class="since-group" title="Filter by date">
+    <button class="since-btn active" data-since="all">∞</button>
+    <button class="since-btn" data-since="24h">24h</button>
+    <button class="since-btn" data-since="7d">7d</button>
+    <button class="since-btn" data-since="30d">30d</button>
+    <button class="since-btn" data-since="6m">6m</button>
+    <button class="since-btn" data-since="1y">1y</button>
+  </div>
+  <div style="position:relative;display:flex;align-items:center;gap:4px;">
+    <input id="search" type="search" placeholder="Search… or source:X title:X url:X">
+    <button class="icon-btn" id="btn-search-help" style="font-size:11px;padding:1px 5px;flex-shrink:0;" title="Search syntax help">?</button>
+    <div id="search-help-popup" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:50;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;width:420px;font-size:11px;box-shadow:0 4px 16px rgba(0,0,0,.4);">
+      <div style="color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Search syntax</div>
+      <table style="border-collapse:collapse;width:100%;">
+        <tr style="border-bottom:1px solid var(--border);">
+          <th style="text-align:left;color:var(--dim);font-size:10px;padding:3px 8px 3px 0;font-weight:normal;">Query</th>
+          <th style="text-align:left;color:var(--dim);font-size:10px;padding:3px 0;font-weight:normal;">Effect</th>
+        </tr>
+        <tr><td style="padding:4px 8px 2px 0;color:var(--blue);white-space:nowrap;"><code>ransomware</code></td><td style="padding:4px 0 2px;color:var(--text);">Global — title, URL, content, source name</td></tr>
+        <tr><td style="padding:2px 8px 2px 0;color:var(--blue);white-space:nowrap;"><code>source:cert.pl</code></td><td style="padding:2px 0;color:var(--text);">Source name contains "cert.pl"</td></tr>
+        <tr><td style="padding:2px 8px 2px 0;color:var(--blue);white-space:nowrap;"><code>title:duck</code></td><td style="padding:2px 0;color:var(--text);">Title contains "duck"</td></tr>
+        <tr><td style="padding:2px 8px 2px 0;color:var(--blue);white-space:nowrap;"><code>title="*duck*"</code></td><td style="padding:2px 0;color:var(--text);">Same</td></tr>
+        <tr><td style="padding:2px 8px 2px 0;color:var(--blue);white-space:nowrap;"><code>url:unit42</code></td><td style="padding:2px 0;color:var(--text);">URL contains "unit42"</td></tr>
+        <tr><td style="padding:2px 8px 2px 0;color:var(--blue);white-space:nowrap;"><code>source:talos malware</code></td><td style="padding:2px 0;color:var(--text);">Source filter + global search</td></tr>
+        <tr><td style="padding:2px 8px 4px 0;color:var(--blue);white-space:nowrap;"><code>tag:apt</code></td><td style="padding:2px 0 4px;color:var(--text);">Sources tagged "apt"</td></tr>
+      </table>
+      <div style="color:var(--dim);font-size:10px;margin-top:8px;border-top:1px solid var(--border);padding-top:6px;">Tokens can be combined. Bare text always searches globally across title, URL, downloaded content, and source name. Tags can also be filtered via the colored pills in the sidebar.</div>
+    </div>
+  </div>
+  <span id="search-hint" style="font-size:10px;color:var(--orange);white-space:nowrap;"></span>
+  <div class="spacer"></div>
+  <span id="stats-bar"></span>
+  <span id="filter-count" style="font-size:11px;color:var(--blue);white-space:nowrap;display:none;"></span>
+  <span id="ar-countdown" style="font-size:10px;color:var(--dim);white-space:nowrap;"></span>
+  <button class="btn btn-primary" id="btn-fetch">Fetch All</button>
+  <button class="btn" id="btn-prefetch" title="Download article content for offline use">⬇ Download</button>
+  <button class="btn" id="btn-prefetch-log" style="display:none;color:var(--orange);border-color:var(--orange);font-size:11px;padding:3px 9px;" title="View download errors">⚠ 0 failed</button>
+  <button class="btn" id="btn-sync" style="display:none;">Sync Scenarios</button>
+  <button class="icon-btn" id="btn-settings" title="Settings">⚙</button>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div id="sidebar-head">
+      <span>Sources</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="icon-btn" id="btn-src-all" style="font-size:10px;padding:1px 5px;" title="Select all visible sources">all</button>
+        <button class="icon-btn" id="btn-src-none" style="font-size:10px;padding:1px 5px;" title="Deselect all sources">none</button>
+        <button class="btn" id="btn-add-src" style="padding:2px 8px;font-size:11px;">+</button>
+      </div>
+    </div>
+    <div style="padding:5px 8px 4px;border-bottom:1px solid var(--border);display:flex;gap:5px;align-items:center;">
+      <input id="src-search" type="search" placeholder="Filter sources…"
+             style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
+                    color:var(--text);padding:3px 8px;font-family:var(--mono);font-size:11px;">
+      <button id="btn-src-refs" title="Show only scenario reference sources"
+              style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--radius);
+                     cursor:pointer;color:var(--dim);font-size:10px;padding:2px 6px;font-family:var(--mono);">ref</button>
+    </div>
+    <div id="tag-filter-bar" style="display:none;padding:4px 8px 3px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:3px;"></div>
+    <div id="source-list"></div>
+    <div id="sidebar-foot">
+      <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:5px;cursor:pointer;">
+        <input type="checkbox" id="chk-active-only" checked> Active only
+      </label>
+      <span id="src-count" style="font-size:10px;color:var(--dim);"></span>
+      <span style="font-size:10px;color:var(--dim);" title="Scenario reference stubs are hidden by default — search by name or domain to find and activate them">Search to find ref sources</span>
+    </div>
+  </div>
+
+  <div id="content-wrap">
+    <div id="article-area">
+      <div id="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="cb"><input type="checkbox" id="chk-all"></th>
+              <th class="dt">Date</th>
+              <th class="ttl">Title</th>
+              <th class="st">Status</th>
+              <th class="act"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div id="empty">No articles found.</div>
+      </div>
+      <div id="bottombar">
+        <span id="sel-info">0 selected</span>
+        <button class="btn" id="btn-copy" disabled>Copy URLs</button>
+        <button class="btn" id="btn-mark-seen" disabled>Mark Seen</button>
+        <button class="btn" id="btn-mark-new" disabled>Mark New</button>
+        <div class="spacer2"></div>
+        <div id="fetch-progress">
+          <span id="prog-text"></span>
+          <div id="pbar-wrap"><div id="pbar" style="width:0%"></div></div>
+        </div>
+        <span id="total-lbl"></span>
+      </div>
+    </div>
+
+    <!-- Preview panel -->
+    <div id="preview">
+      <div id="preview-head">
+        <span id="preview-src"></span>
+        <span id="preview-rule-badge" style="display:none;font-size:10px;color:var(--orange);border:1px solid var(--orange);border-radius:10px;padding:1px 7px;white-space:nowrap;" title="Content filter active">⚡ filtered</span>
+        <a id="preview-orig" href="#" target="_blank" class="icon-btn" title="Open original">↗</a>
+        <button class="icon-btn" id="btn-filter-toggle" title="Set content filter">≡</button>
+        <button class="icon-btn" id="btn-ioc-toggle" title="Extract IOCs">⚗</button>
+        <button class="icon-btn" id="btn-scenario-toggle" title="View linked .adel scenarios" style="display:none;">◈</button>
+        <button class="icon-btn" id="btn-raw-toggle" title="Toggle raw markdown">⌥</button>
+        <button class="icon-btn" id="btn-preview-refresh" title="Force re-download">⟳</button>
+        <button class="icon-btn" id="btn-preview-close" title="Close">×</button>
+      </div>
+      <!-- Live filter form -->
+      <div id="filter-panel">
+        <div id="filter-pattern-row">
+          <label>Pattern</label>
+          <input id="filter-pattern" placeholder="unit42.paloaltonetworks.com" title="URL substring — longest match wins">
+        </div>
+        <div class="filter-row">
+          <label>From</label>
+          <input id="filter-start" placeholder="## Executive Summary  (include from here)">
+        </div>
+        <div class="filter-row">
+          <label>Until</label>
+          <input id="filter-end" placeholder="## See also  (exclude from here)">
+        </div>
+        <div class="filter-actions">
+          <button class="btn btn-primary" id="btn-filter-save" style="font-size:11px;padding:3px 10px;">Save rule</button>
+          <button class="btn" id="btn-filter-clear" style="font-size:11px;padding:3px 10px;">Clear rule</button>
+          <span id="filter-hint" style="color:var(--dim);font-size:10px;line-height:1;align-self:center;"></span>
+        </div>
+      </div>
+      <div id="preview-body">
+        <div id="md-content"></div>
+        <div id="raw-view"><pre id="raw-text"></pre></div>
+      </div>
+      <div id="preview-cached"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Source wizard -->
+<div class="modal-bg" id="modal-wizard">
+  <div class="modal" style="width:500px;">
+
+    <!-- Step 1: URL entry -->
+    <div class="wiz-step active" id="wiz-step-url">
+      <h2 style="margin-bottom:10px;">Add Source</h2>
+      <div style="color:var(--dim);font-size:11px;margin-bottom:10px;">Paste the URL of a blog, news page, or RSS/Atom feed. Click <strong style="color:var(--text);">Discover</strong> to auto-detect the best strategy.</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px;">
+        <input id="wiz-url" type="url" placeholder="https://blog.example.com/"
+               style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 10px;font-family:var(--mono);font-size:12px;">
+        <button class="btn btn-primary" id="wiz-btn-discover" style="flex-shrink:0;min-width:90px;">Discover</button>
+      </div>
+      <div id="wiz-url-status" style="min-height:18px;font-size:11px;color:var(--dim);margin-bottom:10px;"></div>
+      <button id="wiz-btn-goto-manual" style="background:none;border:none;color:var(--dim);font-size:11px;cursor:pointer;padding:0;text-decoration:underline;">Configure manually instead</button>
+      <div class="modal-actions"><button class="btn" id="wiz-btn-cancel-url">Cancel</button></div>
+    </div>
+
+    <!-- Step 2: Discovery result -->
+    <div class="wiz-step" id="wiz-step-result">
+      <h2 style="margin-bottom:6px;">Add Source</h2>
+      <div id="wiz-result-url" style="font-size:10px;color:var(--dim);margin-bottom:10px;word-break:break-all;"></div>
+      <div id="wiz-result-badge"></div>
+      <div class="wiz-notes" id="wiz-result-notes"></div>
+      <div id="wiz-result-articles"></div>
+      <div class="field" style="margin-top:4px;">
+        <label>Name</label>
+        <input id="wiz-name" type="text" placeholder="e.g. Talos Intelligence">
+      </div>
+      <div class="field">
+        <label>Tags <small>(comma-separated, optional)</small></label>
+        <input id="wiz-tags" type="text" placeholder="apt, favorite">
+      </div>
+      <div class="field">
+        <label>IOC exclusions <small>(optional)</small></label>
+        <textarea id="wiz-ioc-exclude" style="height:44px;" placeholder="images.vendor.com, /cdn/"></textarea>
+        <small>Domains/URL substrings from this source that are not IOCs.</small>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="wiz-btn-back" style="margin-right:auto;">← Back</button>
+        <button class="btn" id="wiz-btn-cancel-result">Cancel</button>
+        <button class="btn btn-primary" id="wiz-btn-add">Add Source</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Manual configuration -->
+    <div class="wiz-step" id="wiz-step-manual">
+      <h2 style="margin-bottom:14px;">Add Source <small style="color:var(--dim);font-weight:normal;font-size:11px;">— manual</small></h2>
+      <div class="modal-row">
+        <div class="field">
+          <label>Name</label>
+          <input id="m-name" type="text" placeholder="Vendor Blog">
+        </div>
+        <div class="field">
+          <label>Type</label>
+          <select id="m-type">
+            <option value="rss">RSS / Atom feed</option>
+            <option value="html">HTML page (CSS selectors)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>URL</label>
+        <input id="m-url" type="url" placeholder="https://…">
+      </div>
+      <div class="type-section show" id="sec-rss">
+        <div class="modal-row">
+          <div class="field">
+            <label>Filter: URL must contain <small>(optional)</small></label>
+            <input id="m-rss-url" placeholder="/threat-intelligence/">
+          </div>
+          <div class="field">
+            <label>Filter: tag must contain <small>(optional)</small></label>
+            <input id="m-rss-tag" placeholder="Threat Intelligence">
+          </div>
+        </div>
+      </div>
+      <div class="type-section" id="sec-html">
+        <div class="modal-row">
+          <div class="field">
+            <label>Container selector <small>(optional)</small></label>
+            <input id="m-container" placeholder="article.blog-item">
+          </div>
+          <div class="field">
+            <label>Link selector</label>
+            <input id="m-link" placeholder="h2 a">
+          </div>
+        </div>
+        <div class="modal-row">
+          <div class="field">
+            <label>Link prefix <small>(for relative URLs)</small></label>
+            <input id="m-prefix" placeholder="https://example.com">
+          </div>
+          <div class="field">
+            <label>Filter: URL must contain <small>(optional)</small></label>
+            <input id="m-html-url" placeholder="/blog/research/">
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Tags <small>(comma-separated, optional)</small></label>
+        <input id="m-tags" type="text" placeholder="apt, favorite">
+      </div>
+      <div class="field">
+        <label>IOC exclusions <small>(optional)</small></label>
+        <textarea id="m-ioc-exclude" style="height:44px;" placeholder="images.vendor.com, /cdn/"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="wiz-manual-back" style="margin-right:auto;">← Back</button>
+        <button class="btn" id="btn-add-cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-add-save">Add Source</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-bg" id="modal-settings">
+  <div class="modal" style="width:540px;">
+    <h2>Settings</h2>
+    <div class="field">
+      <label>Content path (for scenario sync)</label>
+      <input id="s-content-path" type="text">
+      <small>Directory containing .adel files — used by "Sync Scenarios"</small>
+    </div>
+    <div class="field">
+      <label>Auto-refresh interval <small>(minutes; 0 = disabled)</small></label>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input id="s-auto-refresh" type="number" min="0" step="5" style="width:80px;">
+        <button class="btn" id="btn-notif-perm" style="font-size:11px;padding:2px 9px;flex-shrink:0;" title="Grant permission for desktop notifications">🔔 Allow notifications</button>
+        <span id="notif-perm-status" style="font-size:10px;color:var(--dim);"></span>
+      </div>
+      <small>Fetches all active sources automatically. Set to 0 to disable. Browser notifications require permission.</small>
+    </div>
+    <div class="field">
+      <label>Global IOC exclusions <small>(comma or newline separated)</small></label>
+      <textarea id="s-ioc-exclude" style="height:70px;" placeholder="analytics.company.com&#10;cdn.vendor.io&#10;/static/"></textarea>
+      <small>Domains or URL substrings excluded from IOC extraction for every article. The article's own source domain is always excluded automatically.</small>
+    </div>
+    <div class="modal-actions" style="margin-bottom:18px;">
+      <button class="btn" id="btn-settings-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-settings-save">Save settings</button>
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <span style="font-size:12px;color:var(--text);">MISP Warning Lists</span>
+          <small style="color:var(--dim);display:block;margin-top:2px;">Used to filter false positives from IOC extraction (⚗ button in preview).</small>
+        </div>
+        <button class="btn" id="btn-sync-wl" style="font-size:11px;padding:2px 9px;flex-shrink:0;" title="Download from github.com/MISP/misp-warninglists">Sync</button>
+      </div>
+      <div id="wl-stats" style="color:var(--dim);font-size:10px;margin-top:5px;"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Edit Source modal -->
+<div class="modal-bg" id="modal-edit-src">
+  <div class="modal" style="width:480px;">
+    <h2>Edit source</h2>
+    <input type="hidden" id="edit-src-uuid">
+    <div class="field">
+      <label>Name</label>
+      <input id="edit-src-name" type="text">
+    </div>
+    <div class="field">
+      <label>Feed URL</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input id="edit-src-url" type="url" style="font-size:11px;flex:1;">
+        <button class="btn" id="btn-edit-discover" type="button" style="font-size:11px;padding:3px 9px;white-space:nowrap;" title="Run feed discovery on the current URL">🔍 Discover</button>
+      </div>
+      <div id="edit-discover-status" style="font-size:11px;color:var(--dim);margin-top:4px;min-height:14px;"></div>
+    </div>
+    <div class="field">
+      <label>Scraper type</label>
+      <select id="edit-src-scraper" style="width:100%;padding:5px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;">
+        <option value="rss">RSS / Atom feed</option>
+        <option value="html">HTML page (CSS selectors)</option>
+        <option value="sitemap">XML sitemap</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Tags <small>(comma-separated, e.g. favorite, apt, cert)</small></label>
+      <input id="edit-src-tags" type="text" placeholder="favorite, apt">
+    </div>
+    <div class="field">
+      <label>IOC exclusions for this source <small>(comma or newline separated)</small></label>
+      <textarea id="edit-ioc-exclude" style="height:55px;" placeholder="images.vendor.com&#10;/cdn/"></textarea>
+      <small>Domains/substrings specific to this source's blog that should not be treated as IOCs.</small>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="edit-src-active">
+        <span>Active (included in Fetch All)</span>
+      </label>
+    </div>
+    <div id="edit-src-fetch-error" style="display:none;font-size:11px;color:var(--red);background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);border-radius:4px;padding:6px 8px;margin-bottom:6px;word-break:break-all;"></div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin:10px 0 6px;">
+      <span style="font-size:11px;color:var(--dim);">Date extraction — read from article page when content is downloaded</span>
+    </div>
+    <div class="field">
+      <label>Date from URL <small>(strftime format, tried first)</small></label>
+      <input id="edit-date-url-fmt" type="text" placeholder="%Y/%m/%d  or  %Y-%m-%d">
+      <small>Scans the article URL for this pattern. E.g. <code>%Y/%m</code> matches <code>/2026/05/</code> → first of month.</small>
+    </div>
+    <div class="field">
+      <label>Date selector <small>(CSS selector, fallback)</small></label>
+      <input id="edit-date-sel" type="text" placeholder='time[datetime], span.published, .entry-date'>
+      <small>Element on the article page. If it has a <code>datetime</code> attribute it is used directly.</small>
+    </div>
+    <div class="field">
+      <label>Date format <small>(strftime for element text, optional)</small></label>
+      <input id="edit-date-fmt" type="text" placeholder="%B %d, %Y  or  %Y-%m-%d">
+      <small>Only needed when the element has no <code>datetime</code> attribute.</small>
+    </div>
+    <div class="field">
+      <label>Card date selector <small>(CSS selector within listing card, HTML scraper only)</small></label>
+      <input id="edit-card-date-sel" type="text" placeholder="time.date, div.post-date">
+      <small>Extracts the publication date from each card on the listing page at fetch time.</small>
+    </div>
+    <div class="field">
+      <label>Card date format <small>(strftime, optional)</small></label>
+      <input id="edit-card-date-fmt" type="text" placeholder="%B %d, %Y  or  %Y-%m-%d">
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin:10px 0 6px;">
+      <span style="font-size:11px;color:var(--dim);">Feed filters</span>
+    </div>
+    <div class="field">
+      <label>URL must contain <small>(optional)</small></label>
+      <input id="edit-url-filter" type="text" placeholder="/threat-intelligence/">
+    </div>
+    <div class="field">
+      <label>Tag must contain <small>(optional)</small></label>
+      <input id="edit-tag-filter" type="text" placeholder="Threat Intelligence">
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin:10px 0 6px;">
+      <span style="font-size:11px;color:var(--dim);">Pagination — HTML scraper only</span>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="edit-paginate">
+        <span>Follow pagination links (fetch all pages)</span>
+      </label>
+    </div>
+    <div id="edit-pagination-opts" style="display:none;">
+      <div class="field">
+        <label>Next-page selector <small>(CSS selector for the &ldquo;next&rdquo; link)</small></label>
+        <input id="edit-next-sel" type="text" placeholder="a.pagination-next, a[rel=next]">
+        <small>Leave blank to use the default: <code>a.pagination-next, a[rel=next]</code></small>
+      </div>
+      <div class="field">
+        <label>Max pages <small>(0 = unlimited)</small></label>
+        <input id="edit-max-pages" type="number" min="0" value="0" style="width:80px;">
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin:10px 0 6px;">
+      <span style="font-size:11px;color:var(--dim);">Feed fetch method</span>
+    </div>
+    <div class="field">
+      <label>TLS impersonation <small>(RSS/Atom sources only — use when the feed is blocked by Akamai, Cloudflare, etc.)</small></label>
+      <select id="edit-tls-impersonate">
+        <option value="">Auto (try all strategies)</option>
+        <option value="firefox">Firefox (curl-cffi)</option>
+        <option value="chrome">Chrome (curl-cffi)</option>
+        <option value="chrome120">Chrome 120 (curl-cffi)</option>
+      </select>
+      <small>Impersonates the browser's exact TLS fingerprint — bypasses CDN bot-detection that blocks Python requests.</small>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin:10px 0 6px;">
+      <span style="font-size:11px;color:var(--dim);">Content download</span>
+    </div>
+    <div class="field">
+      <label>Block detection <small>(comma-separated strings that indicate a bot-block page)</small></label>
+      <input id="edit-block-detect" type="text" placeholder="Access Denied, errors.edgesuite.net">
+      <small>If any of these strings are found in the downloaded page, the download is retried with the next strategy instead of caching the error page.</small>
+    </div>
+    <div class="field">
+      <label>Download user-agent <small>(for fetching article content)</small></label>
+      <select id="edit-download-ua-preset">
+        <option value="">Chrome (default)</option>
+        <option value="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0">Firefox</option>
+        <option value="Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)">Googlebot</option>
+        <option value="Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)">Bingbot</option>
+        <option value="Wget/1.21.4">Wget</option>
+        <option value="curl/8.4.0">curl</option>
+        <option value="python-requests/2.31.0">python-requests</option>
+        <option value="__custom__">Custom…</option>
+      </select>
+      <input id="edit-download-ua-custom" type="text" placeholder="Mozilla/5.0 …" style="display:none;margin-top:6px;">
+      <small>Overrides the User-Agent when downloading article content for this source. Applied across all three download strategies.</small>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin:10px 0 6px;">
+      <span style="font-size:11px;color:var(--dim);">Content filter — trim article markdown before display and IOC extraction</span>
+    </div>
+    <div class="modal-row">
+      <div class="field">
+        <label>From <small>(include content from this string)</small></label>
+        <input id="edit-rule-start" type="text" placeholder="## Analysis">
+        <small>Leave blank to start from the beginning.</small>
+      </div>
+      <div class="field">
+        <label>Until <small>(exclude content after this string)</small></label>
+        <input id="edit-rule-end" type="text" placeholder="## See also">
+        <small>Leave blank to keep until the end. Can be set without From.</small>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin:10px 0 6px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:11px;color:var(--dim);">Date backfill</span>
+      <button class="btn" id="btn-edit-src-backfill" style="font-size:11px;padding:2px 9px;" title="Fetch publication dates for articles that currently have none">Backfill dates</button>
+    </div>
+    <div id="edit-backfill-status" style="font-size:11px;color:var(--dim);margin-bottom:8px;min-height:16px;"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btn-edit-src-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-edit-src-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Source confirmation modal -->
+<div class="modal-bg" id="modal-del-src">
+  <div class="modal" style="width:380px;">
+    <h2>Delete source</h2>
+    <p style="color:var(--dim);font-size:12px;margin-bottom:16px;">
+      Delete <strong id="del-src-name" style="color:var(--text);"></strong>?<br>
+      This also removes all its articles from the database.
+    </p>
+    <label id="del-src-reject-row" style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--dim);margin-bottom:14px;cursor:pointer;">
+      <input type="checkbox" id="del-src-reject">
+      Never re-add this domain from scenario references
+    </label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+      <button class="btn" id="btn-del-src-cancel">Cancel</button>
+      <button class="btn" id="btn-del-src-only">Delete source only</button>
+      <button class="btn" style="border-color:var(--red);color:var(--red);" id="btn-del-src-content">Delete + downloaded content</button>
+    </div>
+  </div>
+</div>
+
+<!-- Prefetch error log modal -->
+<div class="modal-bg" id="modal-prefetch-log">
+  <div class="modal" style="width:640px;max-height:80vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h2 style="margin:0;">Download Log</h2>
+      <span id="prefetch-log-summary" style="font-size:11px;color:var(--dim);"></span>
+    </div>
+    <div id="prefetch-log-list" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);font-size:11px;"></div>
+    <div class="modal-actions" style="margin-top:12px;">
+      <button class="btn" id="btn-prefetch-log-retry" style="margin-right:auto;">⟳ Retry all failed</button>
+      <button class="btn" id="btn-prefetch-log-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = {
+  sources: [],
+  articles: [],
+  total: 0,
+  selected: new Set(),
+  activeTags: new Set(),
+  filter: { status: 'all', sourceIds: new Set(), q: '', since: 'all', dlError: false,
+            noisy: false, sourceQ: '', titleQ: '', urlQ: '', tagQ: '' },
+  activeOnly: true,
+  sourceSearch: '',
+  showRefs: false,
+  fetching: false,
+  prefetching: false,
+  prefetchPollTimer: null,
+  timedOut: new Set(),
+  inFlight: new Set(),
+  freshUuids: new Set(),
+  prefetchUuids: new Set(),
+  pollTimer: null,
+  offset: 0,
+  loadingMore: false,
+  previewId: null,
+  previewRaw: '',
+  previewRule: null,
+  showRaw: false,
+  showIOC: false,
+  showScenario: false,
+  scenariosEnabled: false,
+  cachedIOCs: null,
+  iocApplyWL: true,
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const _TAG_PALETTE = ['#58a6ff','#3fb950','#d29922','#f85149','#d2a8ff','#ffa657','#79c0ff','#ff7b72','#56d364','#e3b341'];
+function tagColor(tag) {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) & 0xfffffff;
+  return _TAG_PALETTE[h % _TAG_PALETTE.length];
+}
+
+function srcFavicon(sourceUuid) {
+  const src = S.sources.find(s => s.uuid === sourceUuid);
+  if (!src) return '';
+  try {
+    const domain = new URL(src.url).hostname;
+    if (!domain || domain.startsWith('internal')) return '';
+    return `/api/favicon?domain=${encodeURIComponent(domain)}`;
+  } catch { return ''; }
+}
+
+// ── Query parser ─────────────────────────────────────────────────────────────
+// Supports: source:X  title:X  title="*X*"  url:X  tag:X  bare text (global)
+function parseQuery(raw) {
+  let source = '', title = '', url = '', tag = '', global = raw;
+
+  // title="*value*"  or  title=value
+  global = global.replace(/\btitle\s*=\s*"?\*?([^"*\s]+)\*?"?/gi, (_, v) => { title = v; return ''; });
+  // source:value  title:value  url:value  tag:value  (value is optional — bare "tag:" is stripped)
+  global = global.replace(/\b(source|title|url|tag):(?:"([^"]+)"|(\S+))?/gi, (_, field, quoted, bare) => {
+    const val = quoted || bare || '';
+    if (val) {
+      if (field.toLowerCase() === 'source') source = val;
+      else if (field.toLowerCase() === 'title') title = val;
+      else if (field.toLowerCase() === 'url')   url   = val;
+      else if (field.toLowerCase() === 'tag')   tag   = val;
+    }
+    return '';
+  });
+  return { global: global.trim(), source, title, url, tag };
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let _toastTimer;
+function toast(msg, dur = 2200) {
+  clearTimeout(_toastTimer);
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  _toastTimer = setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const text = await r.text();
+    let msg = text;
+    try { msg = JSON.parse(text).detail || text; } catch {}
+    throw new Error(msg);
+  }
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+// ── Sources ───────────────────────────────────────────────────────────────────
+async function loadSources() {
+  S.sources = await api('GET', '/api/sources?include_pseudo=true');
+  renderSources();
+  renderTagFilter();
+}
+
+function renderTagFilter() {
+  const bar = $('tag-filter-bar');
+  const allTags = new Set();
+  S.sources.forEach(s => (s.tags || []).forEach(t => allTags.add(t)));
+  if (!allTags.size) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = [...allTags].sort().map(t => {
+    const active = S.activeTags.has(t);
+    const c = tagColor(t);
+    return `<span data-tag="${t}" style="cursor:pointer;font-size:10px;padding:1px 8px;border-radius:10px;white-space:nowrap;
+      border:1px solid ${active ? c : 'var(--border)'};color:${active ? '#fff' : c};
+      background:${active ? c + '44' : 'transparent'};" title="Filter by tag: ${t}">${t}</span>`;
+  }).join('');
+  bar.querySelectorAll('span[data-tag]').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const tag = pill.dataset.tag;
+      if (S.activeTags.has(tag)) S.activeTags.delete(tag);
+      else S.activeTags.add(tag);
+      renderTagFilter();
+      renderSources();
+      loadArticles();
+    });
+  });
+}
+
+function renderSources() {
+  const list = $('source-list');
+  const q = S.sourceSearch.toLowerCase();
+
+  // Update ref toggle button style
+  const refBtn = $('btn-src-refs');
+  if (refBtn) {
+    refBtn.style.borderColor = S.showRefs ? 'var(--blue)' : 'var(--border)';
+    refBtn.style.color       = S.showRefs ? 'var(--blue)' : 'var(--dim)';
+    refBtn.style.background  = S.showRefs ? 'rgba(88,166,255,.1)' : 'none';
+  }
+
+  let visible;
+  if (S.showRefs) {
+    // Ref mode: show only pseudo-sources, optionally filtered by search
+    visible = S.sources.filter(s => s.is_pseudo);
+    if (q) visible = visible.filter(s => s.name.toLowerCase().includes(q) || s.url.toLowerCase().includes(q));
+  } else if (q) {
+    // Search mode: match across ALL sources including pseudo
+    visible = S.sources.filter(s => s.name.toLowerCase().includes(q) || s.url.toLowerCase().includes(q));
+  } else {
+    // Default: real sources only, respect active-only toggle
+    visible = S.sources.filter(s => !s.is_pseudo);
+    if (S.activeOnly) visible = visible.filter(s => s.active);
+  }
+  if (!S.showRefs && S.activeTags.size > 0)
+    visible = visible.filter(s => (s.tags || []).some(t => S.activeTags.has(t)));
+
+  const realCount = S.sources.filter(s => !s.is_pseudo).length;
+  const refCount  = S.sources.filter(s =>  s.is_pseudo).length;
+  const countEl = $('src-count');
+  if (countEl) {
+    if (S.showRefs) countEl.textContent = `${visible.length} of ${refCount} refs`;
+    else if (q)     countEl.textContent = `${visible.length} results`;
+    else            countEl.textContent = `${visible.length} of ${realCount}`;
+  }
+  list.innerHTML = visible.map(s => {
+    const dots = (s.tags || []).map(t =>
+      `<span style="width:6px;height:6px;border-radius:50%;background:${tagColor(t)};flex-shrink:0;" title="${t}"></span>`
+    ).join('');
+    if (s.is_pseudo) {
+      return `
+      <div class="src" data-uuid="${s.uuid}" style="opacity:.7;">
+        <span class="src-name" title="${s.url}" style="font-size:10px;">${s.name}</span>
+        <span style="font-size:9px;color:var(--dim);border:1px solid var(--border);border-radius:3px;padding:0 3px;flex-shrink:0;" title="Scenario reference stub">ref</span>
+        <button class="src-activate" data-uuid="${s.uuid}" data-name="${s.name.replace(/"/g,'&quot;')}"
+                style="display:none;background:none;border:1px solid var(--green);border-radius:3px;cursor:pointer;
+                       color:var(--green);font-size:10px;padding:0 5px;white-space:nowrap;flex-shrink:0;"
+                title="Activate as a real feed source">＋ Add</button>
+        <button class="src-del" data-uuid="${s.uuid}" data-name="${s.name.replace(/"/g,'&quot;')}" data-url="${s.url}"
+                style="display:none;" title="Delete">✕</button>
+      </div>`;
+    }
+    const hasFetchError = !!s.last_fetch_error;
+    return `
+    <div class="src ${S.filter.sourceIds.has(s.uuid) ? 'on' : ''}" data-uuid="${s.uuid}"${hasFetchError ? ' style="background:rgba(248,81,73,.08);"' : ''}>
+      <input type="checkbox" ${S.filter.sourceIds.has(s.uuid) ? 'checked' : ''} data-uuid="${s.uuid}">
+      <span class="src-name" title="${s.url}">${s.name}${s.article_count ? ` <span style="color:var(--dim);font-size:10px">(${s.article_count})</span>` : ''}</span>
+      ${dots}
+      ${!s.active ? '<span style="font-size:9px;color:var(--red)" title="Source disabled — excluded from Fetch All. Re-enable via ✎ edit.">off</span>' : ''}
+      ${s.last_fetch_error ? `<span style="font-size:11px;color:var(--red);cursor:default" title="Last fetch error: ${s.last_fetch_error.replace(/"/g,'&quot;')}">⚠</span>` : ''}
+      ${S.inFlight.has(s.uuid) ? '<span class="src-spinner" title="Fetching…"></span>' : ''}
+      ${S.timedOut.has(s.uuid) ? '<span style="font-size:9px;color:var(--red)" title="Fetch timed out (>30s)">⏱</span>' : ''}
+      ${!s.last_fetched && !S.inFlight.has(s.uuid) ? '<span style="font-size:9px;color:var(--orange)" title="Never fetched">◌</span>' : ''}
+      <button class="src-edit" data-uuid="${s.uuid}" title="Edit source">✎</button>
+      <button class="src-del" data-uuid="${s.uuid}" data-name="${s.name.replace(/"/g,'&quot;')}" data-url="${s.url}" title="Delete source">✕</button>
+    </div>`;
+  }).join('');
+
+
+  list.querySelectorAll('.src').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('.src-edit,.src-del,.src-dates,input')) return;
+      const cb = row.querySelector('input[type=checkbox]');
+      cb.checked = !cb.checked;
+      const uuid = cb.dataset.uuid;
+      S.filter.sourceIds[cb.checked ? 'add' : 'delete'](uuid);
+      renderSources();
+      loadArticles();
+      updateFetchBtn();
+    });
+  });
+
+  list.querySelectorAll('input[type=checkbox]').forEach(c => {
+    c.addEventListener('change', e => {
+      e.stopPropagation();
+      const uuid = c.dataset.uuid;
+      S.filter.sourceIds[c.checked ? 'add' : 'delete'](uuid);
+      renderSources();
+      loadArticles();
+      updateFetchBtn();
+    });
+  });
+
+  list.querySelectorAll('.src-edit').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const src = S.sources.find(s => s.uuid === btn.dataset.uuid);
+      if (!src) return;
+      const cfg = src.config || {};
+      $('edit-src-uuid').value    = src.uuid;
+      $('edit-src-name').value    = src.name;
+      $('edit-src-url').value     = src.url || '';
+      $('edit-discover-status').textContent = '';
+      $('edit-discover-status').style.color = 'var(--dim)';
+      delete $('edit-src-url').dataset.discoveredLinkSelector;
+      delete $('edit-src-url').dataset.discoveredContainerSelector;
+      delete $('edit-src-url').dataset.discoveredLinkPrefix;
+      $('edit-src-tags').value    = (src.tags || []).join(', ');
+      $('edit-ioc-exclude').value = Array.isArray(cfg.ioc_exclude) ? cfg.ioc_exclude.join(', ') : (cfg.ioc_exclude || '');
+      $('edit-src-active').checked = !!src.active;
+      $('edit-src-scraper').value = src.scraper || 'rss';
+      const errBox = $('edit-src-fetch-error');
+      if (src.last_fetch_error) {
+        errBox.textContent = '⚠ Last fetch error: ' + src.last_fetch_error;
+        errBox.style.display = '';
+      } else {
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+      }
+      $('edit-date-url-fmt').value     = cfg.date_url_format   || '';
+      $('edit-date-sel').value         = cfg.date_selector    || '';
+      $('edit-date-fmt').value         = cfg.date_format      || '';
+      $('edit-card-date-sel').value    = cfg.card_date_selector || '';
+      $('edit-card-date-fmt').value    = cfg.card_date_format  || '';
+      $('edit-tls-impersonate').value = cfg.tls_impersonate || '';
+      $('edit-block-detect').value = Array.isArray(cfg.block_detect) ? cfg.block_detect.join(', ') : (cfg.block_detect || '');
+      $('edit-rule-start').value  = cfg.rule_start || '';
+      $('edit-rule-end').value    = cfg.rule_end   || '';
+      $('edit-backfill-status').textContent = '';
+      $('edit-url-filter').value  = cfg.filter_url_contains || '';
+      $('edit-tag-filter').value  = cfg.filter_tag_contains || '';
+      const paginate = !!cfg.paginate;
+      $('edit-paginate').checked  = paginate;
+      $('edit-next-sel').value    = cfg.next_selector || '';
+      $('edit-max-pages').value   = cfg.max_pages != null ? cfg.max_pages : 0;
+      $('edit-pagination-opts').style.display = paginate ? '' : 'none';
+      const ua = cfg.download_ua || '';
+      const presetSel = $('edit-download-ua-preset');
+      const presetVals = [...presetSel.options].map(o => o.value).filter(v => v !== '__custom__');
+      if (!ua) {
+        presetSel.value = '';
+        $('edit-download-ua-custom').style.display = 'none';
+        $('edit-download-ua-custom').value = '';
+      } else if (presetVals.includes(ua)) {
+        presetSel.value = ua;
+        $('edit-download-ua-custom').style.display = 'none';
+        $('edit-download-ua-custom').value = '';
+      } else {
+        presetSel.value = '__custom__';
+        $('edit-download-ua-custom').style.display = '';
+        $('edit-download-ua-custom').value = ua;
+      }
+      $('modal-edit-src').classList.add('open');
+    });
+  });
+
+  list.querySelectorAll('.src-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      $('del-src-name').textContent = btn.dataset.name;
+      $('modal-del-src').dataset.uuid = btn.dataset.uuid;
+      // Show "reject domain" checkbox only for sources with a real HTTP domain
+      const url = btn.dataset.url || '';
+      const showReject = /^https?:\/\//i.test(url) && !url.startsWith('internal://');
+      $('del-src-reject-row').style.display = showReject ? 'flex' : 'none';
+      $('del-src-reject').checked = false;
+      $('modal-del-src').classList.add('open');
+    });
+  });
+
+  // Pseudo-source rows: show action buttons on hover
+  list.querySelectorAll('.src[data-uuid]').forEach(row => {
+    if (!row.querySelector('.src-activate')) return;
+    row.addEventListener('mouseenter', () => {
+      row.querySelector('.src-activate').style.display = '';
+      row.querySelector('.src-del').style.display = '';
+    });
+    row.addEventListener('mouseleave', () => {
+      row.querySelector('.src-activate').style.display = 'none';
+      row.querySelector('.src-del').style.display = 'none';
+    });
+  });
+
+  list.querySelectorAll('.src-activate').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      btn.disabled = true;
+      btn.textContent = '…';
+      try {
+        const r = await api('PATCH', `/api/sources/${encodeURIComponent(btn.dataset.uuid)}`, { active: true });
+        let msg = `"${btn.dataset.name}" added`;
+        if (r.discovered) {
+          msg += ` — discovered ${r.discovered.scraper === 'rss' ? 'RSS feed' : 'HTML scraper'}, fetching now…`;
+        } else {
+          msg += ' — no feed auto-detected, fetching now…';
+        }
+        toast(msg, 4500);
+        await loadSources();
+      } catch(err) { toast('Error: ' + err.message); }
+      finally { btn.disabled = false; btn.textContent = '＋ Add'; }
+    });
+  });
+}
+
+// ── Articles ──────────────────────────────────────────────────────────────────
+function _articleParams(offset) {
+  const activeTags = new Set([...S.activeTags]);
+  if (S.filter.tagQ) activeTags.add(S.filter.tagQ.toLowerCase());
+  let sourceUuids = new Set(S.filter.sourceIds);
+  if (activeTags.size > 0) {
+    const tagMatched = new Set(
+      S.sources.filter(s => (s.tags || []).some(t => activeTags.has(t.toLowerCase()))).map(s => s.uuid)
+    );
+    if (sourceUuids.size > 0) {
+      for (const uuid of [...sourceUuids]) { if (!tagMatched.has(uuid)) sourceUuids.delete(uuid); }
+    } else {
+      sourceUuids = tagMatched;
+    }
+  }
+  return new URLSearchParams({
+    status:       S.filter.dlError ? 'all' : (S.filter.noisy ? 'all' : S.filter.status),
+    source_uuids: [...sourceUuids].join(','),
+    q:          S.filter.q,
+    since:      S.filter.since,
+    limit:      500,
+    offset,
+    dl_error:   S.filter.dlError,
+    noisy:      S.filter.noisy,
+    source_q:   S.filter.sourceQ,
+    title_q:    S.filter.titleQ,
+    url_q:      S.filter.urlQ,
+  });
+}
+
+async function loadArticles(markFreshFrom = null) {
+  S.offset = 0;
+  const data = await api('GET', `/api/articles?${_articleParams(0)}`);
+  S.articles = data.articles;
+  S.total = data.total;
+  S.selected.clear();
+  if (markFreshFrom !== null) {
+    S.freshUuids = new Set(S.articles.filter(a => !markFreshFrom.has(a.uuid)).map(a => a.uuid));
+  }
+  renderArticles();
+  updateSel();
+  _updateTotalLabel();
+}
+
+async function loadMoreArticles() {
+  if (S.loadingMore || S.articles.length >= S.total) return;
+  S.loadingMore = true;
+  const btn = $('btn-load-more');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+  try {
+    S.offset += 500;
+    const data = await api('GET', `/api/articles?${_articleParams(S.offset)}`);
+    S.articles = S.articles.concat(data.articles);
+    S.total = data.total;
+    renderArticles();
+    updateSel();
+    _updateTotalLabel();
+  } catch(e) { toast('Error: ' + e.message); S.offset -= 500; }
+  finally { S.loadingMore = false; }
+}
+
+function _updateTotalLabel() {
+  const shown = S.articles.length;
+  const total = S.total;
+  $('total-lbl').textContent = shown < total
+    ? `${shown.toLocaleString()} of ${total.toLocaleString()} articles`
+    : `${total.toLocaleString()} articles`;
+  const fc = $('filter-count');
+  const isFiltered = S.filter.sourceIds.size > 0 || S.filter.status !== 'all' || S.filter.q ||
+                     S.filter.since !== 'all' || S.filter.dlError || S.activeTags.size > 0;
+  if (isFiltered) {
+    fc.textContent = `${total.toLocaleString()} shown`;
+    fc.style.display = '';
+  } else {
+    fc.style.display = 'none';
+  }
+}
+
+function fmtDate(pub, seen) {
+  const iso = pub || seen;
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  const diff = Date.now() - d;
+  if (diff < 0) return 'now';
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days}d`;
+  if (days < 365) return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en', { month: 'short', day: 'numeric', year: '2-digit' });
+}
+
+function fmtDateFull(pub, seen) {
+  const iso = pub || seen;
+  if (!iso) return 'unknown date';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const label = pub ? 'Published' : 'Downloaded';
+  return `${label}: ${d.toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' })}`;
+}
+
+function renderArticles() {
+  const tbody = $('tbody');
+  const empty = $('empty');
+  if (!S.articles.length) { tbody.innerHTML = ''; empty.style.display = 'flex'; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = S.articles.map(a => {
+    const src = S.sources.find(s => s.uuid === a.source_uuid);
+    const dots = (src?.tags || []).map(t =>
+      `<span style="width:6px;height:6px;border-radius:50%;background:${tagColor(t)};flex-shrink:0;display:inline-block;margin-left:4px;" title="${t}"></span>`
+    ).join('');
+    return `
+    <tr data-uuid="${a.uuid}" class="${S.selected.has(a.uuid) ? 'selected' : ''} ${S.previewId === a.uuid ? 'previewing' : ''} ${S.freshUuids.has(a.uuid) ? 'fresh' : ''}">
+      <td class="cb"><input type="checkbox" data-uuid="${a.uuid}" ${S.selected.has(a.uuid) ? 'checked' : ''}></td>
+      <td class="dt" title="${fmtDateFull(a.published_at, a.first_seen)}">${fmtDate(a.published_at, a.first_seen)}</td>
+      <td class="ttl">
+        <span class="title-link" data-uuid="${a.uuid}">
+          <img class="src-favicon" src="${srcFavicon(a.source_uuid)}" alt="" loading="lazy" onerror="this.style.display='none'">
+          <span class="title-text">${a.title || a.url}</span>
+        </span>
+        <span class="src-label" style="display:flex;align-items:center;gap:0;">${a.source_name}${dots}</span>
+      </td>
+      <td class="st">
+        <span class="badge ${a.status}">${a.status.replace('_', ' ')}</span>
+        ${a.download_status && a.download_status !== 200 ? `<span class="badge dl-err" title="HTTP ${a.download_status} on last download attempt">${a.download_status}</span>` : ''}
+      </td>
+      <td class="act"><button class="copy-btn" data-url="${a.url}" title="Copy URL">⎘</button></td>
+    </tr>`;
+  }).join('');
+
+  if (S.articles.length < S.total) {
+    const remaining = S.total - S.articles.length;
+    const tr = document.createElement('tr');
+    tr.id = 'tr-load-more';
+    tr.innerHTML = `<td colspan="5" style="text-align:center;padding:10px 0;">
+      <button id="btn-load-more" class="btn" style="font-size:11px;padding:3px 14px;">
+        Load more (${remaining.toLocaleString()} remaining)
+      </button></td>`;
+    tbody.appendChild(tr);
+    tr.querySelector('#btn-load-more').addEventListener('click', loadMoreArticles);
+  }
+
+  tbody.querySelectorAll('input[type=checkbox]').forEach(c => {
+    c.addEventListener('change', () => {
+      const uuid = c.dataset.uuid;
+      S.selected[c.checked ? 'add' : 'delete'](uuid);
+      c.closest('tr').classList.toggle('selected', c.checked);
+      updateSel();
+    });
+  });
+
+  tbody.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => copyUrls([btn.dataset.url], btn));
+  });
+
+  tbody.querySelectorAll('.title-link').forEach(link => {
+    link.addEventListener('click', () => openPreview(link.dataset.uuid));
+  });
+}
+
+function updateSel() {
+  const n = S.selected.size;
+  $('sel-info').textContent = `${n} selected`;
+  const has = n > 0;
+  $('btn-copy').disabled = !has;
+  $('btn-mark-seen').disabled = !has;
+  $('btn-mark-new').disabled = !has;
+  const all = $('chk-all');
+  all.checked = S.articles.length > 0 && n === S.articles.length;
+  all.indeterminate = n > 0 && n < S.articles.length;
+}
+
+// ── Select all ────────────────────────────────────────────────────────────────
+$('chk-all').addEventListener('change', e => {
+  if (e.target.checked) S.articles.forEach(a => S.selected.add(a.uuid));
+  else S.selected.clear();
+  renderArticles();
+  updateSel();
+});
+
+// ── Status tabs ───────────────────────────────────────────────────────────────
+document.querySelectorAll('#status-tabs .tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('#status-tabs .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    S.filter.dlError = tab.dataset.status === 'dl_error';
+    S.filter.noisy   = tab.dataset.status === 'noisy';
+    S.filter.status  = (S.filter.dlError || S.filter.noisy) ? 'all' : tab.dataset.status;
+    loadArticles();
+  });
+});
+
+// ── Since buttons ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.since-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.since-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    S.filter.since = btn.dataset.since;
+    loadArticles();
+  });
+});
+
+// ── Search ────────────────────────────────────────────────────────────────────
+let _searchT;
+$('search').addEventListener('input', e => {
+  clearTimeout(_searchT);
+  _searchT = setTimeout(() => {
+    const parsed = parseQuery(e.target.value);
+    S.filter.q       = parsed.global;
+    S.filter.sourceQ = parsed.source;
+    S.filter.titleQ  = parsed.title;
+    S.filter.urlQ    = parsed.url;
+    S.filter.tagQ    = parsed.tag;
+    const hasQuery = e.target.value.trim().length > 0;
+    if (hasQuery) {
+      S.filter.since = 'all';
+      document.querySelectorAll('.since-btn').forEach(b => b.classList.toggle('active', b.dataset.since === 'all'));
+    }
+    updateSearchHint(parsed);
+    loadArticles();
+  }, 300);
+});
+
+function updateSearchHint(parsed) {
+  let hints = [];
+  if (parsed.source) hints.push(`source contains "${parsed.source}"`);
+  if (parsed.title)  hints.push(`title contains "${parsed.title}"`);
+  if (parsed.url)    hints.push(`url contains "${parsed.url}"`);
+  if (parsed.tag)    hints.push(`tag: "${parsed.tag}"`);
+  if (parsed.global) hints.push(`global: "${parsed.global}"`);
+  $('search-hint').textContent = hints.length > 1 || (hints.length === 1 && !parsed.global)
+    ? hints.join(' · ') : '';
+}
+
+$('chk-active-only').addEventListener('change', e => { S.activeOnly = e.target.checked; renderSources(); });
+
+let _srcSearchTimer;
+$('src-search').addEventListener('input', e => {
+  clearTimeout(_srcSearchTimer);
+  _srcSearchTimer = setTimeout(() => { S.sourceSearch = e.target.value.trim(); renderSources(); }, 150);
+});
+$('src-search').addEventListener('keydown', e => { if (e.key === 'Escape') { $('src-search').value = ''; S.sourceSearch = ''; renderSources(); } });
+
+$('btn-src-refs').addEventListener('click', () => {
+  S.showRefs = !S.showRefs;
+  renderSources();
+});
+
+// ── Search help popup ─────────────────────────────────────────────────────────
+$('btn-search-help').addEventListener('click', e => {
+  e.stopPropagation();
+  const p = $('search-help-popup');
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+});
+document.addEventListener('click', () => { $('search-help-popup').style.display = 'none'; });
+$('search-help-popup').addEventListener('click', e => e.stopPropagation());
+
+$('btn-src-all').addEventListener('click', () => {
+  const visible = S.activeOnly ? S.sources.filter(s => s.active) : S.sources;
+  visible.forEach(s => S.filter.sourceIds.add(s.uuid));
+  renderSources(); loadArticles(); updateFetchBtn();
+});
+
+$('btn-src-none').addEventListener('click', () => {
+  S.filter.sourceIds.clear();
+  renderSources(); loadArticles(); updateFetchBtn();
+});
+
+// ── Copy ──────────────────────────────────────────────────────────────────────
+async function copyUrls(urls, btn) {
+  try {
+    await navigator.clipboard.writeText(urls.join('\n'));
+    if (btn) { btn.classList.add('ok'); setTimeout(() => btn.classList.remove('ok'), 1200); }
+    toast(`Copied ${urls.length} URL${urls.length > 1 ? 's' : ''}`);
+  } catch { prompt('Copy URLs:', urls.join('\n')); }
+}
+
+$('btn-copy').addEventListener('click', () => {
+  const urls = S.articles.filter(a => S.selected.has(a.uuid)).map(a => a.url);
+  copyUrls(urls);
+});
+
+// ── Bulk status ───────────────────────────────────────────────────────────────
+async function bulkStatus(status) {
+  const uuids = [...S.selected];
+  await api('POST', '/api/articles/bulk-status', { uuids, status });
+  toast(`Marked ${uuids.length} as ${status}`);
+  loadArticles(); loadStats();
+}
+$('btn-mark-seen').addEventListener('click', () => bulkStatus('seen'));
+$('btn-mark-new').addEventListener('click', () => bulkStatus('new'));
+
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+function updateFetchBtn() {
+  if (S.fetching) return;
+  const n = S.filter.sourceIds.size;
+  $('btn-fetch').textContent = n > 0 ? `Fetch Selected (${n})` : 'Fetch All';
+}
+
+$('btn-fetch').addEventListener('click', async () => {
+  if (S.fetching) return;
+  const source_uuids = S.filter.sourceIds.size > 0 ? [...S.filter.sourceIds] : null;
+  try {
+    await api('POST', '/api/fetch', source_uuids ? { source_uuids } : {});
+    S.fetching = true;
+    S.timedOut = new Set();
+    S.inFlight = new Set();
+    S.freshUuids = new Set();
+    S.prefetchUuids = new Set(S.articles.map(a => a.uuid));
+    $('btn-fetch').disabled = true;
+    $('btn-fetch').textContent = 'Fetching…';
+    $('pbar-wrap').style.display = 'block';
+    startPoll();
+  } catch(e) { toast('Error: ' + e.message); }
+});
+
+function startPoll(onComplete) {
+  if (S.pollTimer) return;
+  let _lastNewArticles = 0;
+  S.pollTimer = setInterval(async () => {
+    try {
+      const s = await api('GET', '/api/fetch/status');
+      const pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+      $('pbar').style.width = pct + '%';
+      const timedOutSuffix = s.timed_out?.length ? ` — ⏱ ${s.timed_out.length} timed out` : '';
+      $('prog-text').textContent = s.running
+        ? `${s.done}/${s.total} — ${s.new_articles} new${timedOutSuffix}`
+        : `Done: ${s.new_articles} new, ${s.errors} errors${timedOutSuffix}`;
+      S.inFlight = new Set(s.in_flight || []);
+      if (!s.running) {
+        S.timedOut = new Set(s.timed_out || []);
+        S.inFlight = new Set();
+        clearInterval(S.pollTimer); S.pollTimer = null;
+        S.fetching = false;
+        $('btn-fetch').disabled = false;
+        updateFetchBtn();
+        setTimeout(() => { $('pbar-wrap').style.display = 'none'; }, 3000);
+        await loadArticles(S.prefetchUuids); loadStats(); loadSources();
+        if (onComplete) onComplete(s.new_articles || 0);
+      } else {
+        if (s.new_articles > _lastNewArticles) {
+          _lastNewArticles = s.new_articles;
+          loadArticles();
+        }
+        renderSources();
+      }
+    } catch {}
+  }, 1500);
+}
+
+// ── Prefetch (offline download) ───────────────────────────────────────────────
+$('btn-prefetch').addEventListener('click', async () => {
+  if (S.prefetching) return;
+  const source_uuids = S.filter.sourceIds.size > 0 ? [...S.filter.sourceIds] : null;
+  try {
+    await api('POST', '/api/prefetch', source_uuids ? { source_uuids } : {});
+    S.prefetching = true;
+    $('btn-prefetch').disabled = true;
+    $('btn-prefetch').textContent = 'Downloading…';
+    startPrefetchPoll();
+  } catch(e) { toast('Error: ' + e.message); }
+});
+
+function startPrefetchPoll() {
+  if (S.prefetchPollTimer) return;
+  S.prefetchPollTimer = setInterval(async () => {
+    try {
+      const s = await api('GET', '/api/prefetch/status');
+      const pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+      $('btn-prefetch').textContent = s.running
+        ? `⬇ ${s.done}/${s.total}`
+        : `⬇ Download`;
+      if (!s.running) {
+        clearInterval(S.prefetchPollTimer); S.prefetchPollTimer = null;
+        S.prefetching = false;
+        $('btn-prefetch').disabled = false;
+        const ok = s.succeeded || 0;
+        const fail = s.errors || 0;
+        updatePrefetchErrorBadge(fail);
+        let msg;
+        if (ok > 0 && fail === 0) {
+          msg = `Cached ${ok} article${ok !== 1 ? 's' : ''}`;
+        } else if (ok > 0) {
+          msg = `Cached ${ok} article${ok !== 1 ? 's' : ''} — ${fail} blocked/failed — click ⚠ for details`;
+        } else if (fail > 0) {
+          msg = `${fail} articles blocked or unreachable — click ⚠ to see reasons`;
+        } else {
+          msg = 'Nothing new to download';
+        }
+        toast(msg, 4500);
+        await loadStats();
+        renderArticles();
+      }
+    } catch {}
+  }, 1500);
+}
+
+// ── Prefetch error log ────────────────────────────────────────────────────────
+function updatePrefetchErrorBadge(errorCount) {
+  const btn = $('btn-prefetch-log');
+  if (errorCount > 0) {
+    btn.textContent = `⚠ ${errorCount} failed`;
+    btn.style.display = '';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+$('btn-prefetch-log').addEventListener('click', async () => {
+  try {
+    const data = await api('GET', '/api/prefetch/log');
+    const entries = data.entries || [];
+    $('prefetch-log-summary').textContent = `${entries.length} error${entries.length !== 1 ? 's' : ''} from last run`;
+    const list = $('prefetch-log-list');
+    if (!entries.length) {
+      list.innerHTML = '<div style="padding:12px;color:var(--dim);">No errors recorded.</div>';
+    } else {
+      list.innerHTML = entries.map(e => `
+        <div style="padding:8px 10px;border-bottom:1px solid rgba(48,54,61,.4);">
+          <div style="display:flex;gap:6px;align-items:baseline;margin-bottom:3px;">
+            <span style="color:var(--dim);font-size:10px;white-space:nowrap;">${(e.ts||'').replace('T',' ').slice(0,19)}</span>
+            <a href="${e.url}" target="_blank" style="color:var(--blue);word-break:break-all;flex:1;">${e.title || e.url}</a>
+          </div>
+          <div style="color:var(--red);font-size:10px;padding-left:0;word-break:break-all;">${e.error}</div>
+        </div>`).join('');
+    }
+    $('modal-prefetch-log').classList.add('open');
+  } catch(err) { toast('Could not load log: ' + err.message); }
+});
+
+$('btn-prefetch-log-close').addEventListener('click', () => $('modal-prefetch-log').classList.remove('open'));
+$('modal-prefetch-log').addEventListener('click', e => { if (e.target === $('modal-prefetch-log')) $('modal-prefetch-log').classList.remove('open'); });
+
+$('btn-prefetch-log-retry').addEventListener('click', async () => {
+  $('modal-prefetch-log').classList.remove('open');
+  $('btn-prefetch').click();
+});
+
+// ── Auto-refresh ──────────────────────────────────────────────────────────────
+const AR = { timer: null, nextAt: 0, countdownTimer: null };
+
+function updateNotifPermStatus() {
+  const el = $('notif-perm-status');
+  if (!('Notification' in window)) { el.textContent = 'not supported'; return; }
+  el.textContent = { granted: '✓ allowed', denied: '✗ blocked', default: '' }[Notification.permission] || '';
+}
+
+$('btn-notif-perm').addEventListener('click', async () => {
+  if (!('Notification' in window)) { toast('Notifications not supported in this browser'); return; }
+  const perm = await Notification.requestPermission();
+  updateNotifPermStatus();
+  if (perm === 'granted') toast('Desktop notifications enabled');
+  else toast('Notification permission denied');
+});
+
+function _notifyNewArticles(count) {
+  if (count <= 0) return;
+  toast(`Auto-refresh: ${count} new article${count === 1 ? '' : 's'}`);
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('ThreatBrowser', {
+      body: `${count} new article${count === 1 ? '' : 's'} found`,
+      icon: '/static/favicon.ico',
+    });
+  }
+}
+
+function _arCountdown() {
+  const el = $('ar-countdown');
+  if (!el) return;
+  if (!AR.nextAt) { el.textContent = ''; return; }
+  const secs = Math.max(0, Math.round((AR.nextAt - Date.now()) / 1000));
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  el.textContent = h > 0 ? `auto ${h}h${String(m).padStart(2,'0')}m`
+                 : m > 0 ? `auto ${m}m${String(s).padStart(2,'0')}s`
+                 : secs > 0 ? `auto ${s}s` : '';
+}
+
+function scheduleAutoRefresh(intervalMinutes) {
+  if (AR.timer) { clearTimeout(AR.timer); AR.timer = null; }
+  if (AR.countdownTimer) { clearInterval(AR.countdownTimer); AR.countdownTimer = null; }
+  AR.nextAt = 0;
+  _arCountdown();
+  if (!intervalMinutes || intervalMinutes <= 0) return;
+  const ms = intervalMinutes * 60 * 1000;
+  AR.nextAt = Date.now() + ms;
+  AR.countdownTimer = setInterval(_arCountdown, 1000);
+  AR.timer = setTimeout(async () => {
+    AR.timer = null;
+    if (S.fetching) { scheduleAutoRefresh(intervalMinutes); return; }
+    try {
+      await api('POST', '/api/fetch', {});
+      S.fetching = true;
+      S.timedOut = new Set(); S.inFlight = new Set();
+      S.freshUuids = new Set();
+      S.prefetchUuids = new Set(S.articles.map(a => a.uuid));
+      $('btn-fetch').disabled = true;
+      $('btn-fetch').textContent = 'Fetching…';
+      $('pbar-wrap').style.display = 'block';
+      startPoll(newCount => {
+        _notifyNewArticles(newCount);
+        scheduleAutoRefresh(intervalMinutes);
+      });
+    } catch { scheduleAutoRefresh(intervalMinutes); }
+  }, ms);
+}
+
+// ── Sync scenarios ────────────────────────────────────────────────────────────
+$('btn-sync').addEventListener('click', async () => {
+  $('btn-sync').disabled = true;
+  $('btn-sync').textContent = 'Scanning…';
+  try {
+    const r = await api('POST', '/api/sync-scenarios');
+    const parts = [];
+    if (r.updated) parts.push(`${r.updated} article${r.updated !== 1 ? 's' : ''} marked`);
+    const unmatched = (r.unmatched || []).length;
+    if (unmatched) parts.push(`${unmatched} URL${unmatched !== 1 ? 's' : ''} not in feed (potential sources)`);
+    toast(`Synced ${r.found} scenario refs — ${parts.join(', ') || 'nothing new'}`, 4000);
+    loadArticles(); loadStats();
+  } catch(e) { toast('Sync error: ' + e.message); }
+  finally { $('btn-sync').disabled = false; $('btn-sync').textContent = 'Sync Scenarios'; }
+});
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  const s = await api('GET', '/api/stats');
+  $('stats-bar').textContent = [
+    s.total ? `${s.total.toLocaleString()} total` : '',
+    s.new ? `${s.new} new` : '',
+    s.no_scenario ? `${s.no_scenario} pending` : '',
+    s.has_scenario ? `${s.has_scenario} covered` : '',
+  ].filter(Boolean).join(' · ');
+  if (!S.prefetching) {
+    const n = s.uncached || 0;
+    $('btn-prefetch').textContent = n > 0 ? `⬇ Download (${n})` : '⬇ Download';
+    $('btn-prefetch').title = n > 0
+      ? `Download ${n} uncached articles for offline use`
+      : 'All articles already downloaded';
+    $('btn-prefetch').disabled = n === 0;
+  }
+}
+
+// ── Preview panel ─────────────────────────────────────────────────────────────
+function md2html(md) {
+  if (!md) return '';
+  return md
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+      `<pre><code class="${lang}">${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
+    .replace(/^#{6} (.+)$/gm, '<h6>$1</h6>')
+    .replace(/^#{5} (.+)$/gm, '<h5>$1</h5>')
+    .replace(/^#{4} (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/^[-*]{3,}$/gm, '<hr>')
+    .replace(/^[ \t]*[*\-+] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .split(/\n\n+/).map(p => {
+      p = p.trim(); if (!p) return '';
+      if (/^<(h[1-6]|ul|ol|li|pre|blockquote|hr)/.test(p)) return p;
+      return `<p>${p.replace(/\n/g, ' ')}</p>`;
+    }).join('\n');
+}
+
+// Apply start/end filter (same logic as termbrowser / gmdgator config.go)
+function applyRule(md, start, end) {
+  if (start) {
+    const idx = md.indexOf(start);
+    if (idx >= 0) md = md.slice(idx);
+  }
+  if (end) {
+    const idx = md.indexOf(end);
+    if (idx >= 0) md = md.slice(0, idx);
+  }
+  return md;
+}
+
+function suggestPattern(url) {
+  try { return new URL(url).hostname; } catch { return url; }
+}
+
+function renderPreview() {
+  const start = $('filter-start').value;
+  const end   = $('filter-end').value;
+  const md = applyRule(S.previewRaw, start, end);
+
+  const badge = $('preview-rule-badge');
+  const hasFilter = !!(start || end);
+  badge.style.display = hasFilter ? '' : 'none';
+
+  if (S.showIOC) {
+    $('raw-view').style.display = 'none';
+    $('md-content').style.display = '';
+    if (S.cachedIOCs) renderIOCPanel(S.cachedIOCs);
+    return;
+  }
+  if (S.showScenario) return; // scenario panel manages its own content
+
+  if (S.showRaw) {
+    $('md-content').style.display = 'none';
+    $('raw-view').style.display = '';
+    $('raw-text').textContent = S.previewRaw;
+  } else {
+    $('raw-view').style.display = 'none';
+    $('md-content').style.display = '';
+    $('md-content').innerHTML = md2html(md);
+  }
+
+  // Highlight matching start/end in hint
+  const hint = $('filter-hint');
+  if (start && S.previewRaw.includes(start)) {
+    $('filter-start').classList.add('match');
+    hint.textContent = '✓ start found';
+  } else {
+    $('filter-start').classList.remove('match');
+    hint.textContent = start ? '✗ start not found' : '';
+  }
+  if (end && S.previewRaw.includes(end)) {
+    $('filter-end').classList.add('match');
+  } else {
+    $('filter-end').classList.remove('match');
+  }
+}
+
+async function openPreview(uuid, force = false) {
+  S.previewId = uuid;
+  S.showRaw = false;
+  S.showIOC = false;
+  S.showScenario = false;
+  S.cachedIOCs = null;
+  $('btn-raw-toggle').style.color = '';
+  $('btn-ioc-toggle').style.color = '';
+  $('btn-scenario-toggle').style.color = '';
+  const article = S.articles.find(a => a.uuid === uuid);
+  $('btn-scenario-toggle').style.display = S.scenariosEnabled && article && article.status === 'has_scenario' ? '' : 'none';
+  $('preview').classList.add('open');
+
+  const url = article ? article.url : '';
+  $('preview-src').textContent = article ? article.source_name : '';
+  $('preview-orig').href = url || '#';
+  $('preview-cached').textContent = '';
+
+  // Pre-fill filter pattern from URL
+  $('filter-pattern').value = suggestPattern(url);
+
+  const body = $('preview-body');
+  body.classList.add('loading');
+  $('md-content').innerHTML = 'Loading…';
+  $('raw-view').style.display = 'none';
+
+  document.querySelectorAll('#tbody tr').forEach(tr =>
+    tr.classList.toggle('previewing', tr.dataset.uuid === uuid));
+
+  try {
+    const data = await api('GET', `/api/articles/${uuid}/content${force ? '?force=true' : ''}`);
+    body.classList.remove('loading');
+    S.previewRaw = data.markdown;
+
+    // Load matching rule from server response (URL-specific or source-level fallback)
+    const rule = data.rule;
+    S.previewRule = rule;
+    $('filter-start').value = rule ? (rule.rule_start || '') : '';
+    $('filter-end').value   = rule ? (rule.rule_end   || '') : '';
+    if (rule && !rule.source_level) $('filter-pattern').value = rule.pattern;
+    const hint = $('filter-hint');
+    hint.textContent = (rule && rule.source_level) ? 'Source default · save to create URL override' : '';
+
+    renderPreview();
+
+    const ca = data.cached_at ? new Date(data.cached_at) : null;
+    $('preview-cached').textContent = ca
+      ? `${data.from_cache ? 'Cached' : 'Downloaded'} ${ca.toLocaleString('en', {dateStyle:'medium',timeStyle:'short'})}`
+      : '';
+  } catch(e) {
+    body.classList.remove('loading');
+    const art = S.articles.find(a => a.uuid === uuid);
+    if (!force && art && !art.cached_at) {
+      $('md-content').innerHTML = `<p style="color:var(--orange)">Article not yet downloaded. Click ⟳ to fetch it (requires internet), or use ⬇ Download to pre-fetch all articles for offline use.</p>`;
+    } else {
+      $('md-content').innerHTML = `<p style="color:var(--red)">Failed to load: ${e.message}</p>`;
+    }
+  }
+}
+
+// Filter panel toggle
+$('btn-filter-toggle').addEventListener('click', () =>
+  $('filter-panel').classList.toggle('open'));
+
+async function fetchAndRenderIOCs() {
+  if (!S.previewId) return;
+  $('md-content').style.display = '';
+  $('raw-view').style.display = 'none';
+  $('md-content').innerHTML = '<span style="color:var(--dim);font-size:12px;">Extracting IOCs…</span>';
+  try {
+    const iocs = await api('GET', `/api/articles/${encodeURIComponent(S.previewId)}/iocs?apply_wl=${S.iocApplyWL}`);
+    S.cachedIOCs = iocs;
+    renderIOCPanel(iocs);
+  } catch(e) {
+    $('md-content').innerHTML = `<span style="color:var(--red);font-size:12px;">IOC extraction failed: ${e.message}</span>`;
+  }
+}
+
+// IOC toggle
+$('btn-ioc-toggle').addEventListener('click', async () => {
+  S.showIOC = !S.showIOC;
+  $('btn-ioc-toggle').style.color = S.showIOC ? 'var(--orange)' : '';
+  if (S.showIOC) {
+    S.showRaw = false; S.showScenario = false;
+    $('btn-raw-toggle').style.color = ''; $('btn-scenario-toggle').style.color = '';
+    if (S.previewId) { await fetchAndRenderIOCs(); return; }
+  }
+  renderPreview();
+});
+
+// Raw toggle
+$('btn-raw-toggle').addEventListener('click', () => {
+  S.showRaw = !S.showRaw;
+  $('btn-raw-toggle').style.color = S.showRaw ? 'var(--blue)' : '';
+  if (S.showRaw) {
+    S.showIOC = false; S.showScenario = false;
+    $('btn-ioc-toggle').style.color = ''; $('btn-scenario-toggle').style.color = '';
+  }
+  renderPreview();
+});
+
+// Live re-render on input
+['filter-start', 'filter-end'].forEach(id => {
+  $(id).addEventListener('input', renderPreview);
+});
+
+// Save rule
+$('btn-filter-save').addEventListener('click', async () => {
+  const pattern   = $('filter-pattern').value.trim();
+  const rule_start = $('filter-start').value;
+  const rule_end   = $('filter-end').value;
+  if (!pattern) { toast('Pattern required'); return; }
+  try {
+    await api('PUT', '/api/rules', { pattern, rule_start, rule_end });
+    toast(`Rule saved for "${pattern}"`);
+    S.previewRule = { pattern, rule_start, rule_end };
+    renderPreview();
+  } catch(e) { toast('Error: ' + e.message); }
+});
+
+// Clear rule
+$('btn-filter-clear').addEventListener('click', async () => {
+  if (!S.previewRule) { $('filter-start').value = ''; $('filter-end').value = ''; renderPreview(); return; }
+  if (S.previewRule.source_level) {
+    toast('Source-level filter — edit the source to remove it');
+    return;
+  }
+  try {
+    await api('DELETE', `/api/rules/${S.previewRule.id}`);
+    S.previewRule = null;
+    $('filter-start').value = ''; $('filter-end').value = '';
+    renderPreview();
+    toast('Rule deleted');
+  } catch(e) { toast('Error: ' + e.message); }
+});
+
+$('btn-preview-close').addEventListener('click', () => {
+  $('preview').classList.remove('open');
+  $('filter-panel').classList.remove('open');
+  S.previewId = null;
+  document.querySelectorAll('#tbody tr').forEach(tr => tr.classList.remove('previewing'));
+});
+
+$('btn-preview-refresh').addEventListener('click', () => {
+  if (S.previewId) openPreview(S.previewId, true);
+});
+
+// ── Source wizard ─────────────────────────────────────────────────────────────
+const WIZ = { result: null };
+
+function wizShow(id) {
+  document.querySelectorAll('.wiz-step').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+function wizClose() {
+  $('modal-wizard').classList.remove('open');
+  WIZ.result = null;
+  $('wiz-url').value = '';
+  $('wiz-url-status').textContent = '';
+  wizShow('wiz-step-url');
+}
+
+function _noteClass(text) {
+  const lo = text.toLowerCase();
+  if (lo.includes('detected') || lo.includes('present') || lo.includes('found') ||
+      lo.includes('pagination') || lo.includes('rss') || lo.includes('atom') || lo.includes('feed'))
+    return 'ok';
+  if (lo.includes('no ') || lo.includes('could not') || lo.includes('failed') ||
+      lo.includes('manual') || lo.includes('partial'))
+    return 'warn';
+  return '';
+}
+
+function _noteIcon(cls) {
+  return cls === 'ok' ? '✓ ' : cls === 'warn' ? '⚠ ' : '· ';
+}
+
+$('btn-add-src').addEventListener('click', () => {
+  wizShow('wiz-step-url');
+  $('modal-wizard').classList.add('open');
+  setTimeout(() => $('wiz-url').focus(), 60);
+});
+$('wiz-btn-cancel-url').addEventListener('click', wizClose);
+$('wiz-btn-cancel-result').addEventListener('click', wizClose);
+$('modal-wizard').addEventListener('click', e => { if (e.target === $('modal-wizard')) wizClose(); });
+$('wiz-btn-back').addEventListener('click', () => wizShow('wiz-step-url'));
+$('wiz-manual-back').addEventListener('click', () => wizShow('wiz-step-url'));
+$('btn-add-cancel').addEventListener('click', wizClose);
+
+$('wiz-btn-goto-manual').addEventListener('click', () => {
+  $('m-url').value = $('wiz-url').value.trim();
+  wizShow('wiz-step-manual');
+});
+
+$('wiz-url').addEventListener('keydown', e => { if (e.key === 'Enter') $('wiz-btn-discover').click(); });
+
+$('wiz-btn-discover').addEventListener('click', async () => {
+  let url = $('wiz-url').value.trim();
+  if (!url) { $('wiz-url-status').textContent = 'Enter a URL first.'; return; }
+  if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; $('wiz-url').value = url; }
+
+  const btn = $('wiz-btn-discover');
+  btn.disabled = true; btn.textContent = 'Discovering…';
+  $('wiz-url-status').textContent = 'Fetching and analysing the page…';
+
+  try {
+    const r = await api('POST', '/api/discover', { url });
+    WIZ.result = r;
+
+    // URL display (show redirect if URL changed)
+    $('wiz-result-url').textContent = r.url !== url ? `${url}  →  ${r.url}` : r.url;
+
+    // Strategy badge
+    const stratLabel = r.strategy === 'rss' ? '⊞ RSS / Atom feed'
+                     : r.strategy === 'html' ? '⊟ HTML scraper' : '? Unknown';
+    const countLabel = r.article_count > 0
+      ? ` · ${r.article_count} article${r.article_count !== 1 ? 's' : ''} found`
+      : '';
+    $('wiz-result-badge').innerHTML =
+      `<span class="wiz-badge ${r.strategy}">${stratLabel}${countLabel}</span>`;
+
+    // Notes
+    $('wiz-result-notes').innerHTML = (r.notes || []).map(n => {
+      const cls = _noteClass(n);
+      return `<div class="wiz-note ${cls}">${_noteIcon(cls)}${n}</div>`;
+    }).join('');
+
+    // Article sample
+    if (r.articles && r.articles.length) {
+      $('wiz-result-articles').innerHTML =
+        `<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Sample articles</div>
+         <div class="wiz-articles">
+           ${r.articles.map(a => `<div class="wiz-art" title="${a.url}">${a.title || a.url}</div>`).join('')}
+         </div>`;
+    } else {
+      $('wiz-result-articles').innerHTML =
+        `<div style="color:var(--orange);font-size:11px;padding:8px 0;">No articles detected — switch to manual configuration to set selectors.</div>`;
+    }
+
+    // Pre-fill name (trim site suffix noise like " – Blog")
+    let autoName = (r.name || '').replace(/\s[–|]\s.*$/, '').trim();
+    $('wiz-name').value = autoName;
+    $('wiz-tags').value = '';
+    $('wiz-ioc-exclude').value = '';
+
+    wizShow('wiz-step-result');
+    setTimeout(() => { if (!$('wiz-name').value) $('wiz-name').focus(); }, 60);
+  } catch(e) {
+    $('wiz-url-status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Discover';
+  }
+});
+
+$('wiz-btn-add').addEventListener('click', async () => {
+  const r = WIZ.result;
+  if (!r) return;
+  const name = $('wiz-name').value.trim();
+  if (!name) { toast('Name is required'); $('wiz-name').focus(); return; }
+  const tags = $('wiz-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const ioc  = $('wiz-ioc-exclude').value.replace(/\n/g, ',').split(',').map(p => p.trim()).filter(Boolean);
+  const config = Object.assign({}, r.config);
+  if (ioc.length) config.ioc_exclude = ioc;
+  const scraper = r.strategy === 'rss' ? 'rss' : 'html';
+  try {
+    await api('POST', '/api/sources', { name, url: r.url, scraper, config, tags });
+    wizClose();
+    toast(`"${name}" added`);
+    loadSources();
+  } catch(e) { toast('Error: ' + e.message); }
+});
+
+// Manual mode
+$('m-type').addEventListener('change', () => {
+  const isRss = $('m-type').value === 'rss';
+  $('sec-rss').classList.toggle('show', isRss);
+  $('sec-html').classList.toggle('show', !isRss);
+});
+
+$('btn-add-save').addEventListener('click', async () => {
+  const name = $('m-name').value.trim();
+  const url  = $('m-url').value.trim();
+  const type = $('m-type').value;
+  if (!name || !url) { toast('Name and URL required'); return; }
+  let config = {};
+  if (type === 'rss') {
+    if ($('m-rss-url').value.trim()) config.filter_url_contains = $('m-rss-url').value.trim();
+    if ($('m-rss-tag').value.trim()) config.filter_tag_contains = $('m-rss-tag').value.trim();
+  } else {
+    if ($('m-link').value.trim())      config.link_selector      = $('m-link').value.trim();
+    if ($('m-container').value.trim()) config.container_selector = $('m-container').value.trim();
+    if ($('m-prefix').value.trim())    config.link_prefix        = $('m-prefix').value.trim();
+    if ($('m-html-url').value.trim())  config.filter_url_contains= $('m-html-url').value.trim();
+  }
+  const ioc  = $('m-ioc-exclude').value.replace(/\n/g, ',').split(',').map(p => p.trim()).filter(Boolean);
+  if (ioc.length) config.ioc_exclude = ioc;
+  const tags = $('m-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  try {
+    await api('POST', '/api/sources', { name, url, scraper: type, config, tags });
+    wizClose();
+    ['m-name','m-url','m-rss-url','m-rss-tag','m-link','m-container','m-prefix','m-html-url','m-tags','m-ioc-exclude'].forEach(id => $(id).value = '');
+    toast(`"${name}" added`);
+    loadSources();
+  } catch(e) { toast('Error: ' + e.message); }
+});
+
+// ── Settings modal ────────────────────────────────────────────────────────────
+async function loadRules() { /* no-op — content filters are now per-source */ }
+
+async function loadWLStats() {
+  try {
+    const s = await api('GET', '/api/warninglists/stats');
+    $('wl-stats').textContent = s.total
+      ? `${s.total.toLocaleString()} entries — ${s.hostname||0} hostnames, ${s.ip||0} IPs, ${s.hash||0} hashes`
+      : 'No warning lists synced yet.';
+  } catch { $('wl-stats').textContent = ''; }
+}
+
+$('btn-sync-wl').addEventListener('click', async () => {
+  $('btn-sync-wl').disabled = true;
+  $('btn-sync-wl').textContent = 'Syncing…';
+  $('wl-stats').textContent = 'Downloading MISP warning lists (may take ~30s)…';
+  try {
+    const r = await api('POST', '/api/warninglists/sync');
+    toast(`Warning lists synced: ${r.entries.toLocaleString()} entries from ${r.lists} lists (${r.skipped_large} large lists skipped)`);
+    await loadWLStats();
+  } catch(e) { toast('Sync error: ' + e.message); $('wl-stats').textContent = 'Sync failed.'; }
+  finally { $('btn-sync-wl').disabled = false; $('btn-sync-wl').textContent = 'Sync'; }
+});
+
+$('btn-settings').addEventListener('click', async () => {
+  const cfg = await api('GET', '/api/settings');
+  $('s-content-path').value  = cfg.content_path || '';
+  $('s-ioc-exclude').value   = cfg.ioc_exclude_global || '';
+  $('s-auto-refresh').value  = cfg.auto_refresh_interval != null ? cfg.auto_refresh_interval : 60;
+  updateNotifPermStatus();
+  await loadRules();
+  await loadWLStats();
+  $('modal-settings').classList.add('open');
+});
+$('btn-settings-cancel').addEventListener('click', () => $('modal-settings').classList.remove('open'));
+$('modal-settings').addEventListener('click', e => { if (e.target === $('modal-settings')) $('modal-settings').classList.remove('open'); });
+
+$('btn-settings-save').addEventListener('click', async () => {
+  const interval = parseInt($('s-auto-refresh').value, 10) || 0;
+  const contentPath = $('s-content-path').value.trim();
+  await api('PATCH', '/api/settings', {
+    content_path:          contentPath,
+    ioc_exclude_global:    $('s-ioc-exclude').value.trim(),
+    auto_refresh_interval: interval,
+  });
+  $('modal-settings').classList.remove('open');
+  toast('Settings saved');
+  scheduleAutoRefresh(interval);
+  applyScenarioVisibility(!!contentPath);
+});
+
+
+// ── Delete source modal ───────────────────────────────────────────────────────
+$('btn-del-src-cancel').addEventListener('click', () => $('modal-del-src').classList.remove('open'));
+$('modal-del-src').addEventListener('click', e => { if (e.target === $('modal-del-src')) $('modal-del-src').classList.remove('open'); });
+
+async function doDeleteSource(deleteContent) {
+  const uuid = $('modal-del-src').dataset.uuid;
+  const rejectDomain = $('del-src-reject').checked;
+  $('modal-del-src').classList.remove('open');
+  try {
+    await api('DELETE', `/api/sources/${encodeURIComponent(uuid)}?delete_content=${deleteContent}&reject_domain=${rejectDomain}`);
+    S.filter.sourceIds.delete(uuid);
+    let msg = `Source deleted${deleteContent ? ' with cached content' : ''}`;
+    if (rejectDomain) msg += ' — domain blocked from future refs';
+    toast(msg);
+    await loadSources();
+    await loadArticles();
+    await loadStats();
+    updateFetchBtn();
+  } catch(e) { toast('Error: ' + e.message); }
+}
+
+$('btn-del-src-only').addEventListener('click', () => doDeleteSource(false));
+$('btn-del-src-content').addEventListener('click', () => doDeleteSource(true));
+
+// ── Edit source modal ─────────────────────────────────────────────────────────
+$('btn-edit-src-cancel').addEventListener('click', () => $('modal-edit-src').classList.remove('open'));
+
+$('btn-edit-discover').addEventListener('click', async () => {
+  const url = $('edit-src-url').value.trim();
+  if (!url) { $('edit-discover-status').textContent = 'Enter a URL first.'; return; }
+  const btn = $('btn-edit-discover');
+  const status = $('edit-discover-status');
+  btn.disabled = true;
+  btn.textContent = '…';
+  status.style.color = 'var(--dim)';
+  status.textContent = 'Discovering…';
+  try {
+    const r = await api('POST', '/api/discover', { url });
+    const strategy = r.strategy === 'rss' ? 'RSS feed' : r.strategy === 'html' ? 'HTML scraper' : 'unknown';
+    const count = r.article_count > 0 ? `, ${r.article_count} article${r.article_count !== 1 ? 's' : ''} found` : '';
+    status.style.color = r.strategy === 'unknown' ? 'var(--orange)' : 'var(--green)';
+    status.textContent = `${strategy}${count}${r.url !== url ? ' · URL updated' : ''}`;
+
+    // Apply discovered URL if it changed (e.g. redirect to feed)
+    if (r.url && r.url !== url) $('edit-src-url').value = r.url;
+
+    // Apply scraper type
+    if (r.strategy === 'rss' || r.strategy === 'html' || r.strategy === 'sitemap') {
+      $('edit-src-scraper').value = r.strategy;
+    }
+
+    // Apply discovered config fields to the form
+    const cfg = r.config || {};
+    $('edit-url-filter').value      = cfg.filter_url_contains || '';
+    $('edit-tag-filter').value      = cfg.filter_tag_contains || '';
+    const paginate = !!cfg.paginate;
+    $('edit-paginate').checked      = paginate;
+    $('edit-pagination-opts').style.display = paginate ? '' : 'none';
+    $('edit-next-sel').value        = cfg.next_selector || '';
+    $('edit-max-pages').value       = cfg.max_pages != null ? cfg.max_pages : 0;
+    // HTML-specific selectors (shown in manual-add panel; not directly in edit modal)
+    // date fields are left untouched — user may have set them manually
+    if (cfg.link_selector !== undefined) {
+      // store in a data attribute so save can pick it up
+      $('edit-src-url').dataset.discoveredLinkSelector = cfg.link_selector || '';
+      $('edit-src-url').dataset.discoveredContainerSelector = cfg.container_selector || '';
+      $('edit-src-url').dataset.discoveredLinkPrefix = cfg.link_prefix || '';
+    }
+  } catch(err) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Discovery failed: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Discover';
+  }
+});
+
+$('btn-edit-src-backfill').addEventListener('click', async () => {
+  const uuid = $('edit-src-uuid').value;
+  const src  = S.sources.find(s => s.uuid === uuid);
+  const btn  = $('btn-edit-src-backfill');
+  btn.disabled = true;
+  $('edit-backfill-status').textContent = 'Backfilling…';
+  try {
+    const r = await api('POST', `/api/sources/${encodeURIComponent(uuid)}/backfill-dates`);
+    $('edit-backfill-status').textContent = r.pending === 0
+      ? 'All dates already present.'
+      : `Fetching dates for ${r.pending} article${r.pending !== 1 ? 's' : ''} in the background…`;
+  } catch(e) {
+    $('edit-backfill-status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+$('modal-edit-src').addEventListener('click', e => { if (e.target === $('modal-edit-src')) $('modal-edit-src').classList.remove('open'); });
+$('edit-paginate').addEventListener('change', () => {
+  $('edit-pagination-opts').style.display = $('edit-paginate').checked ? '' : 'none';
+});
+$('edit-download-ua-preset').addEventListener('change', () => {
+  $('edit-download-ua-custom').style.display = $('edit-download-ua-preset').value === '__custom__' ? '' : 'none';
+});
+
+$('btn-edit-src-save').addEventListener('click', async () => {
+  const uuid = $('edit-src-uuid').value;
+  const src = S.sources.find(s => s.uuid === uuid);
+  if (!src) return;
+  const cfg = Object.assign({}, src.config || {});
+  const dateurlfmt = $('edit-date-url-fmt').value.trim();
+  const datesel    = $('edit-date-sel').value.trim();
+  const datefmt    = $('edit-date-fmt').value.trim();
+  const urlf       = $('edit-url-filter').value.trim();
+  const tagf       = $('edit-tag-filter').value.trim();
+  if (dateurlfmt) cfg.date_url_format = dateurlfmt; else delete cfg.date_url_format;
+  if (datesel)    cfg.date_selector   = datesel;    else delete cfg.date_selector;
+  if (datefmt)    cfg.date_format     = datefmt;    else delete cfg.date_format;
+  const cardDateSel = $('edit-card-date-sel').value.trim();
+  const cardDateFmt = $('edit-card-date-fmt').value.trim();
+  if (cardDateSel) cfg.card_date_selector = cardDateSel; else delete cfg.card_date_selector;
+  if (cardDateFmt) cfg.card_date_format   = cardDateFmt; else delete cfg.card_date_format;
+  // Apply HTML selectors discovered via the Re-discover button (stored in data attrs)
+  const urlEl = $('edit-src-url');
+  const discLink = urlEl.dataset.discoveredLinkSelector;
+  if (discLink !== undefined) {
+    if (discLink) cfg.link_selector = discLink; else delete cfg.link_selector;
+    const discCont = urlEl.dataset.discoveredContainerSelector;
+    if (discCont) cfg.container_selector = discCont; else delete cfg.container_selector;
+    const discPfx = urlEl.dataset.discoveredLinkPrefix;
+    if (discPfx) cfg.link_prefix = discPfx; else delete cfg.link_prefix;
+    // Clear so a second save without re-discovering doesn't re-apply stale values
+    delete urlEl.dataset.discoveredLinkSelector;
+    delete urlEl.dataset.discoveredContainerSelector;
+    delete urlEl.dataset.discoveredLinkPrefix;
+  }
+  const tlsImp  = $('edit-tls-impersonate').value;
+  if (tlsImp)   cfg.tls_impersonate = tlsImp; else delete cfg.tls_impersonate;
+  const blockd     = $('edit-block-detect').value.trim();
+  const ruleStart  = $('edit-rule-start').value;
+  const ruleEnd    = $('edit-rule-end').value;
+  if (blockd)    cfg.block_detect        = blockd;    else delete cfg.block_detect;
+  if (ruleStart) cfg.rule_start          = ruleStart; else delete cfg.rule_start;
+  if (ruleEnd)   cfg.rule_end            = ruleEnd;   else delete cfg.rule_end;
+  if (urlf)      cfg.filter_url_contains = urlf;      else delete cfg.filter_url_contains;
+  if (tagf)    cfg.filter_tag_contains = tagf; else delete cfg.filter_tag_contains;
+  const paginate = $('edit-paginate').checked;
+  if (paginate) {
+    cfg.paginate = true;
+    const nextSel = $('edit-next-sel').value.trim();
+    if (nextSel) cfg.next_selector = nextSel; else delete cfg.next_selector;
+    const maxPages = parseInt($('edit-max-pages').value, 10);
+    if (maxPages > 0) cfg.max_pages = maxPages; else delete cfg.max_pages;
+  } else {
+    delete cfg.paginate;
+    delete cfg.next_selector;
+    delete cfg.max_pages;
+  }
+  const uaPreset = $('edit-download-ua-preset').value;
+  const downloadUa = uaPreset === '__custom__' ? $('edit-download-ua-custom').value.trim() : uaPreset;
+  if (downloadUa) cfg.download_ua = downloadUa; else delete cfg.download_ua;
+  const iocExclude = $('edit-ioc-exclude').value.replace(/\n/g, ',').split(',').map(p => p.trim()).filter(Boolean);
+  if (iocExclude.length) cfg.ioc_exclude = iocExclude; else delete cfg.ioc_exclude;
+  const tags = $('edit-src-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const newUrl = $('edit-src-url').value.trim();
+  const patch = {
+    name:    $('edit-src-name').value.trim() || src.name,
+    active:  $('edit-src-active').checked,
+    scraper: $('edit-src-scraper').value,
+    config:  cfg,
+    tags,
+  };
+  if (newUrl && newUrl !== src.url) patch.url = newUrl;
+  try {
+    const r = await api('PATCH', `/api/sources/${encodeURIComponent(uuid)}`, patch);
+    $('modal-edit-src').classList.remove('open');
+    if (patch.url && r.discovered) {
+      const s = r.discovered.scraper === 'rss' ? 'RSS feed' : 'HTML scraper';
+      toast(`URL updated — discovered ${s}, fetching now…`, 4500);
+    } else if (patch.url && !r.discovered) {
+      toast('URL updated — no feed detected, HTML scraper set. If no articles appear, open ✎ Settings to add a link selector.', 7000);
+    } else {
+      toast('Source updated');
+    }
+    await loadSources();
+    if (patch.url) await loadArticles();
+  } catch(e) { toast('Error: ' + e.message); }
+});
+
+// ── IOC extraction ────────────────────────────────────────────────────────────
+
+const _BENIGN = new Set([
+  'github.com','gitlab.com','google.com','microsoft.com','apple.com','amazon.com',
+  'twitter.com','x.com','facebook.com','linkedin.com','youtube.com','reddit.com',
+  'wikipedia.org','stackoverflow.com','cloudflare.com','amazonaws.com','azure.com',
+  'office.com','outlook.com','yahoo.com','bing.com','example.com','w3.org',
+  'schema.org','jquery.com','bootstrapcdn.com','fonts.googleapis.com',
+  'virustotal.com','hybrid-analysis.com','any.run','shodan.io','urlscan.io',
+  'joesandbox.com','malwarebytes.com','sophos.com','kaspersky.com','trendmicro.com',
+  'checkpoint.com','paloaltonetworks.com','sentinelone.com','crowdstrike.com',
+  'mandiant.com','fireeye.com','elastic.co','talos','splunk.com',
+]);
+
+function _isBenign(host) {
+  host = host.toLowerCase();
+  const parts = host.split('.');
+  for (let i = 0; i < parts.length - 1; i++)
+    if (_BENIGN.has(parts.slice(i).join('.'))) return true;
+  return false;
+}
+
+function _isPrivateIP(ip) {
+  const [a, b] = ip.split('.').map(Number);
+  return a === 10 || a === 127 || a === 0 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168);
+}
+
+function _defang(text) {
+  return text
+    .replace(/hxxps?/gi, m => m.replace(/xx/i, 'tt'))
+    .replace(/\[\.?\]/g, '.').replace(/\[\.\]/g, '.')
+    .replace(/(\d+)\[\.?\](\d+)/g, '$1.$2');
+}
+
+function extractIOCs(md) {
+  const text = _defang(md);
+  const out = { ips:[], sha256:[], sha1:[], md5:[], cves:[], domains:[], urls:[] };
+  const seen = {};
+  for (const k of Object.keys(out)) seen[k] = new Set();
+
+  function add(cat, val) {
+    if (!seen[cat].has(val)) { seen[cat].add(val); out[cat].push(val); }
+  }
+
+  // CVEs
+  for (const m of text.matchAll(/CVE-\d{4}-\d{4,7}/gi)) add('cves', m[0].toUpperCase());
+
+  // Hashes — strip URLs first to avoid false positives in URL paths
+  const noURLs = text.replace(/https?:\/\/\S+/gi, '');
+  for (const m of noURLs.matchAll(/\b[0-9a-fA-F]{64}\b/g)) add('sha256', m[0].toLowerCase());
+  for (const m of noURLs.matchAll(/\b[0-9a-fA-F]{40}\b/g)) {
+    const v = m[0].toLowerCase();
+    if (!seen.sha256.has(v)) add('sha1', v);
+  }
+  for (const m of noURLs.matchAll(/\b[0-9a-fA-F]{32}\b/g)) {
+    const v = m[0].toLowerCase();
+    if (!seen.sha256.has(v) && !seen.sha1.has(v)) add('md5', v);
+  }
+
+  // IPv4 — skip private/loopback
+  for (const m of text.matchAll(/\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\b/g))
+    if (!_isPrivateIP(m[0])) add('ips', m[0]);
+
+  // URLs (markdown links + bare http)
+  for (const m of text.matchAll(/\]\(((https?|ftp):\/\/[^)\s]+)\)/g)) add('urls', m[1]);
+  for (const m of text.matchAll(/(?<!\()(https?:\/\/[^\s\])"'>,]+)/g)) add('urls', m[1]);
+
+  // Domains from URLs (more reliable than bare extraction)
+  for (const url of out.urls) {
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      if (!_isBenign(host) && host.includes('.')) add('domains', host);
+    } catch {}
+  }
+
+  // Bare domains not already found via URLs
+  const knownTLDs = 'com|net|org|io|gov|edu|info|biz|ru|cn|de|fr|jp|nl|pl|cz|sk|hu|ro|ua|tr|ir|sa|ae|il|in|pk|bd|sg|my|id|ph|vn|th|hk|kr|au|nz|cc|tk|xyz|top|site|online|tech|ly|me|tv|co|uk';
+  const domRe = new RegExp(`\\b([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.(?:[a-z0-9-]+\\.)*(?:${knownTLDs}))\\b`, 'gi');
+  for (const m of noURLs.matchAll(domRe)) {
+    const d = m[1].toLowerCase();
+    if (!_isBenign(d) && d.split('.').length >= 2 && !/^\d+\.\d+$/.test(d))
+      add('domains', d);
+  }
+
+  return out;
+}
+
+function renderIOCPanel(iocs) {
+  const cats = [
+    { k:'ips',    label:'IP Addresses', color:'var(--orange)' },
+    { k:'domains',label:'Domains',      color:'var(--blue)'   },
+    { k:'sha256', label:'SHA-256',      color:'var(--green)'  },
+    { k:'sha1',   label:'SHA-1',        color:'var(--green)'  },
+    { k:'md5',    label:'MD5',          color:'var(--green)'  },
+    { k:'cves',   label:'CVEs',         color:'var(--red)'    },
+    { k:'urls',   label:'URLs',         color:'var(--dim)'    },
+  ];
+  const filtered = iocs.filtered_count || 0;
+  const wlOn = iocs.wl_applied !== false; // default true for older responses
+
+  let html = `<div style="font-size:11px;">`;
+
+  // ── toolbar row ──────────────────────────────────────────────────────────────
+  html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:8px;">`;
+
+  // WL toggle checkbox
+  html += `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:10px;color:var(--dim);white-space:nowrap;"
+    title="MISP warning lists contain known-benign domains/IPs/hashes downloaded from github.com/MISP/misp-warninglists">
+    <input type="checkbox" id="chk-ioc-wl" ${wlOn ? 'checked' : ''}> MISP warning lists
+  </label>`;
+
+  if (filtered) {
+    const parts = [];
+    if (wlOn) parts.push('warning lists');
+    parts.push('source domain + custom rules');
+    html += `<span style="color:var(--dim);font-size:10px;">⚡ ${filtered} removed via ${parts.join(' · ')}</span>`;
+  }
+  html += `<button onclick="downloadMISPEvent()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--dim);font-size:10px;padding:2px 8px;"
+    title="Export MISP event JSON with current filter settings">⬇ MISP event</button>`;
+  html += `</div>`;
+
+  // ── IOC categories ───────────────────────────────────────────────────────────
+  let total = 0;
+  for (const { k, label, color } of cats) {
+    if (!iocs[k] || !iocs[k].length) continue;
+    total += iocs[k].length;
+    const listJSON = JSON.stringify(iocs[k]);
+    html += `<div style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+        <span style="font-size:10px;text-transform:uppercase;color:${color};letter-spacing:.5px;">${label}</span>
+        <span style="color:var(--dim);font-size:10px;">${iocs[k].length}</span>
+        <button onclick='copyIOCList(${listJSON})' style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--dim);font-size:10px;padding:1px 6px;" title="Copy all">⎘ all</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        ${iocs[k].map(v => `<div style="display:flex;align-items:center;gap:5px;">
+          <code style="flex:1;font-size:11px;color:var(--text);background:var(--bg3);padding:2px 7px;border-radius:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${v}">${v}</code>
+          <button onclick='copyIOCList([${JSON.stringify(v)}])' style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:13px;padding:1px 3px;border-radius:3px;">⎘</button>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+  if (!total) html += `<p style="color:var(--dim);">No IOCs detected${filtered ? ` (${filtered} removed by filters)` : ''}.</p>`;
+  html += '</div>';
+  $('md-content').innerHTML = html;
+
+  // WL checkbox listener — re-fetch with new flag
+  const chkWL = document.getElementById('chk-ioc-wl');
+  if (chkWL) {
+    chkWL.addEventListener('change', async () => {
+      S.iocApplyWL = chkWL.checked;
+      await fetchAndRenderIOCs();
+    });
+  }
+}
+
+async function downloadMISPEvent() {
+  if (!S.previewId) return;
+  try {
+    const r = await fetch(`/api/articles/${encodeURIComponent(S.previewId)}/misp-event?apply_wl=${S.iocApplyWL}`);
+    if (!r.ok) {
+      const text = await r.text();
+      let msg = text;
+      try { msg = JSON.parse(text).detail || text; } catch {}
+      throw new Error(msg);
+    }
+    const cd = r.headers.get('Content-Disposition') || '';
+    const match = cd.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : `misp-event.json`;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    toast('MISP event downloaded');
+  } catch(e) { toast('MISP export failed: ' + e.message); }
+}
+
+async function copyIOCList(items) {
+  try {
+    await navigator.clipboard.writeText(items.join('\n'));
+    toast(`Copied ${items.length} item${items.length !== 1 ? 's' : ''}`);
+  } catch { prompt('Copy:', items.join('\n')); }
+}
+
+// ── Adel syntax highlighter ───────────────────────────────────────────────────
+function highlightAdel(code) {
+  let out = '', i = 0, n = code.length;
+
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const sp  = (cls, s) => `<span class="adel-${cls}">${esc(s)}</span>`;
+
+  const TOP_KW  = /^(title|description|revision|author|status|reference|tag|tactic|message|exit)$/;
+  const CTRL_KW = /^(if|else|loop|sleep|in|as|switch|case|default|break)$/;
+  const DECL_KW = /^(section|step|help)$/;
+  const ACT_KW  = /^(action|run)$/;
+  const BUILTIN = /^(random|word|user|ip|string)$/;
+
+  while (i < n) {
+    const rest = code.slice(i);
+
+    // Comments: # or //
+    const cm = rest.match(/^(#|\/\/).*$/m);
+    if (cm && cm.index === 0) { out += sp('comment', cm[0]); i += cm[0].length; continue; }
+
+    // Strict triple string: s"""..."""
+    if (rest.startsWith('s"""')) {
+      const end = code.indexOf('"""', i+4);
+      const chunk = end === -1 ? rest : code.slice(i, end+3);
+      out += sp('str-strict', chunk); i += chunk.length; continue;
+    }
+
+    // Triple string: """..."""  with template interpolation
+    if (rest.startsWith('"""')) {
+      const end = code.indexOf('"""', i+3);
+      const chunk = end === -1 ? rest : code.slice(i, end+3);
+      out += highlightStringContent('str-triple', chunk); i += chunk.length; continue;
+    }
+
+    // Double-quoted string: "..."
+    if (rest[0] === '"') {
+      let j = 1;
+      while (j < rest.length && rest[j] !== '"') { if (rest[j] === '\\') j++; j++; }
+      if (j < rest.length) j++;
+      out += highlightStringContent('str', rest.slice(0, j)); i += j; continue;
+    }
+
+    // Variable: $ident
+    const vm = rest.match(/^\$[a-zA-Z_][a-zA-Z0-9_.]*/);
+    if (vm) { out += sp('variable', vm[0]); i += vm[0].length; continue; }
+
+    // %option directive
+    const pm = rest.match(/^(%option)\s+(\w+)/);
+    if (pm) { out += sp('directive', pm[1]) + esc(pm[0].slice(pm[1].length, pm[0].indexOf(pm[2]))) + sp('directive-name', pm[2]); i += pm[0].length; continue; }
+
+    // Word token
+    const wm = rest.match(/^[a-zA-Z_][a-zA-Z0-9_]*/);
+    if (wm) {
+      const w = wm[0];
+      if (ACT_KW.test(w)) {
+        // action Foo.Bar  or  run SimName
+        const after = rest.slice(w.length);
+        const am = after.match(w === 'action'
+          ? /^(\s+)([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)/
+          : /^(\s+)([A-Za-z][A-Za-z0-9_-]*)/);
+        if (am) {
+          out += sp('kw-act', w) + esc(am[1]) + sp('entity', am[2]);
+          i += w.length + am[1].length + am[2].length; continue;
+        }
+        out += sp('kw-act', w);
+      } else if (TOP_KW.test(w))  out += sp('kw-top', w);
+        else if (CTRL_KW.test(w)) out += sp('kw-ctrl', w);
+        else if (DECL_KW.test(w)) out += sp('kw-decl', w);
+        else if (BUILTIN.test(w)) out += sp('builtin', w);
+        else                       out += esc(w);
+      i += w.length; continue;
+    }
+
+    // Number
+    const nm = rest.match(/^[0-9]+(\.[0-9]+)?/);
+    if (nm) { out += sp('number', nm[0]); i += nm[0].length; continue; }
+
+    // Operator
+    const om = rest.match(/^(==|!=|<=|>=|<|>|=)/);
+    if (om) { out += sp('operator', om[0]); i += om[0].length; continue; }
+
+    out += esc(rest[0]); i++;
+  }
+  return out;
+}
+
+function highlightStringContent(cls, raw) {
+  // Highlight ${...} interpolation inside strings
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inner = raw.replace(/(\$\{)([^}]*)(\})/g,
+    (_, a, b, c) => `<span class="adel-interp-p">${esc(a)}</span><span class="adel-variable">${esc(b)}</span><span class="adel-interp-p">${esc(c)}</span>`);
+  // Wrap the whole thing but the interpolation spans broke it — build manually
+  const parts = raw.split(/(\$\{[^}]*\})/g);
+  let out = `<span class="adel-${cls}">`;
+  for (const p of parts) {
+    const m = p.match(/^\$\{([^}]*)\}$/);
+    if (m) out += `<span class="adel-interp-p">\${</span><span class="adel-variable">${esc(m[1])}</span><span class="adel-interp-p">}</span>`;
+    else   out += esc(p);
+  }
+  return out + '</span>';
+}
+
+// ── Scenario panel ─────────────────────────────────────────────────────────────
+$('btn-scenario-toggle').addEventListener('click', async () => {
+  S.showScenario = !S.showScenario;
+  $('btn-scenario-toggle').style.color = S.showScenario ? 'var(--green)' : '';
+  if (S.showScenario) {
+    S.showRaw = false; S.showIOC = false;
+    $('btn-raw-toggle').style.color = '';
+    $('btn-ioc-toggle').style.color = '';
+    $('raw-view').style.display = 'none';
+    $('md-content').style.display = '';
+    $('md-content').innerHTML = '<span style="color:var(--dim);font-size:12px;">Loading scenarios…</span>';
+    try {
+      const { scenarios } = await api('GET', `/api/articles/${encodeURIComponent(S.previewId)}/scenarios`);
+      renderScenarioPanel(scenarios);
+    } catch(e) {
+      $('md-content').innerHTML = `<span style="color:var(--red);font-size:12px;">Failed: ${e.message}</span>`;
+    }
+  } else {
+    renderPreview();
+  }
+});
+
+function renderScenarioPanel(scenarios) {
+  if (!scenarios.length) {
+    $('md-content').innerHTML = '<p style="color:var(--dim);font-size:12px;">No .adel files reference this article.</p>';
+    return;
+  }
+  let html = `<div style="font-size:11px;">`;
+  for (const s of scenarios) {
+    html += `
+      <div style="margin-bottom:20px;">
+        <div style="color:var(--dim);font-size:10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+          <span style="color:var(--orange);">◈</span>
+          <code style="color:var(--text);">${s.path}</code>
+        </div>
+        <pre style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;overflow-x:auto;margin:0;font-size:11px;line-height:1.55;">${highlightAdel(s.content)}</pre>
+      </div>`;
+  }
+  html += '</div>';
+  $('md-content').innerHTML = html;
+}
+
+// ── Scenario visibility ────────────────────────────────────────────────────────
+function applyScenarioVisibility(enabled) {
+  S.scenariosEnabled = !!enabled;
+  const show = S.scenariosEnabled ? '' : 'none';
+  document.querySelector('[data-status="no_scenario"]').style.display  = show;
+  document.querySelector('[data-status="has_scenario"]').style.display = show;
+  $('btn-sync').style.display = show;
+  if (!S.scenariosEnabled) {
+    $('btn-scenario-toggle').style.display = 'none';
+    if (S.showScenario) { S.showScenario = false; renderPreview(); }
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  await loadSources();
+  await loadArticles();
+  await loadStats();
+  const s = await api('GET', '/api/fetch/status');
+  if (s.running) {
+    S.fetching = true;
+    $('btn-fetch').disabled = true;
+    $('btn-fetch').textContent = 'Fetching…';
+    $('pbar-wrap').style.display = 'block';
+    startPoll();
+  }
+  // Resume prefetch progress if a prefetch was already running before page reload
+  try {
+    const ps = await api('GET', '/api/prefetch/status');
+    if (ps.running) {
+      S.prefetching = true;
+      $('btn-prefetch').disabled = true;
+      $('btn-prefetch').textContent = `⬇ ${ps.done}/${ps.total}`;
+      startPrefetchPoll();
+    } else if (ps.finished) {
+      // Restore error badge from last completed run
+      updatePrefetchErrorBadge(ps.errors || 0);
+    }
+  } catch {}
+  // Load settings: auto-refresh + scenario visibility
+  try {
+    const cfg = await api('GET', '/api/settings');
+    const interval = cfg.auto_refresh_interval != null ? Number(cfg.auto_refresh_interval) : 60;
+    scheduleAutoRefresh(interval);
+    applyScenarioVisibility(!!cfg.content_path);
+  } catch {}
+}
+init();
+</script>
+</body>
+</html>

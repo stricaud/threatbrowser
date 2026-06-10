@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#1a2332"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </radialGradient>
+    <radialGradient id="shieldGrad" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#1f3a5f"/>
+      <stop offset="100%" stop-color="#0d2137"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bgGrad)"/>
+
+  <!-- Shield body -->
+  <path d="M512 120
+           L820 240
+           L820 520
+           Q820 720 512 900
+           Q204 720 204 520
+           L204 240
+           Z"
+        fill="url(#shieldGrad)"
+        stroke="#58a6ff"
+        stroke-width="6"
+        opacity="0.95"/>
+
+  <!-- Shield inner border -->
+  <path d="M512 170
+           L772 276
+           L772 516
+           Q772 692 512 850
+           Q252 692 252 516
+           L252 276
+           Z"
+        fill="none"
+        stroke="#58a6ff"
+        stroke-width="2"
+        opacity="0.3"/>
+
+  <!-- Radar rings -->
+  <circle cx="512" cy="490" r="210" fill="none" stroke="#58a6ff" stroke-width="2" opacity="0.18"/>
+  <circle cx="512" cy="490" r="148" fill="none" stroke="#58a6ff" stroke-width="2" opacity="0.25"/>
+  <circle cx="512" cy="490" r="86"  fill="none" stroke="#58a6ff" stroke-width="2.5" opacity="0.35"/>
+
+  <!-- Crosshair lines -->
+  <line x1="512" y1="310" x2="512" y2="670" stroke="#58a6ff" stroke-width="1.5" opacity="0.22"/>
+  <line x1="332" y1="490" x2="692" y2="490" stroke="#58a6ff" stroke-width="1.5" opacity="0.22"/>
+
+  <!-- Eye shape (outer) -->
+  <path d="M512 430 Q620 490 512 550 Q404 490 512 430 Z"
+        fill="#0d1117" opacity="0.5"/>
+  <path d="M340 490 Q430 370 512 370 Q594 370 684 490 Q594 610 512 610 Q430 610 340 490 Z"
+        fill="none" stroke="#58a6ff" stroke-width="5"
+        filter="url(#softglow)" opacity="0.9"/>
+
+  <!-- Iris -->
+  <circle cx="512" cy="490" r="62" fill="#0d1a2e" stroke="#58a6ff" stroke-width="4" opacity="0.95"/>
+
+  <!-- Pupil / scan dot -->
+  <circle cx="512" cy="490" r="30" fill="#58a6ff" filter="url(#glow)" opacity="0.95"/>
+  <circle cx="512" cy="490" r="16" fill="#a5d6ff"/>
+
+  <!-- Radar sweep arc -->
+  <path d="M512 490 L692 440 A185 185 0 0 0 540 308 Z"
+        fill="#58a6ff" opacity="0.10"/>
+
+  <!-- Threat blip dots -->
+  <circle cx="616" cy="356" r="7" fill="#f85149" filter="url(#glow)" opacity="0.9"/>
+  <circle cx="395" cy="612" r="5" fill="#d29922" filter="url(#glow)" opacity="0.8"/>
+  <circle cx="658" cy="538" r="4" fill="#3fb950" filter="url(#glow)" opacity="0.7"/>
+
+  <!-- Bottom text -->
+  <text x="512" y="796"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif"
+        font-size="62" font-weight="700" letter-spacing="4"
+        fill="#58a6ff" text-anchor="middle" opacity="0.85"
+        filter="url(#softglow)">THREAT</text>
+  <text x="512" y="858"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif"
+        font-size="40" font-weight="300" letter-spacing="14"
+        fill="#8b949e" text-anchor="middle">BROWSER</text>
+</svg>
