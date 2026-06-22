@@ -23,7 +23,7 @@ help:
 	@echo "First-time setup:"
 	@echo "  make install-deps && make install-tauri"
 	@echo ""
-	@echo "Build a distributable DMG:"
+	@echo "Build a distributable DMG (includes Installation Notes.txt):"
 	@echo "  make build-dmg      (runs build-server + icons automatically)"
 	@echo ""
 
@@ -85,8 +85,25 @@ dev: icons
 	 fi
 	cargo tauri dev
 
-# ── Build the macOS .app bundle and DMG ──────────────────────────────────────
+# ── Build the macOS .app bundle and DMG (with installer notes) ───────────────
+# After Tauri builds the raw DMG, we remount it, add INSTALL_NOTES.txt, and
+# repack so the user sees the instructions before dragging to Applications.
 build-dmg: icons build-server
 	cargo tauri build
-	@echo ""
-	@echo "DMG is at: $(DMG_OUT)/$(APP_NAME)_*.dmg"
+	@echo "Adding installation notes to DMG..."
+	@TAURI_DMG=$$(ls $(DMG_OUT)/$(APP_NAME)_*.dmg 2>/dev/null | head -1); \
+	 if [ -z "$$TAURI_DMG" ]; then echo "ERROR: no DMG found in $(DMG_OUT)"; exit 1; fi; \
+	 WORK=/tmp/tb_dmg_work; \
+	 MNT=/tmp/tb_dmg_mount; \
+	 FINAL=$(DMG_OUT)/$(APP_NAME)-install.dmg; \
+	 rm -rf "$$WORK" "$$MNT"; \
+	 mkdir -p "$$WORK" "$$MNT"; \
+	 hdiutil attach "$$TAURI_DMG" -mountpoint "$$MNT" -readonly -nobrowse -quiet; \
+	 cp -R "$$MNT/$(APP_NAME).app" "$$WORK/"; \
+	 hdiutil detach "$$MNT" -quiet; \
+	 cp INSTALL_NOTES.txt "$$WORK/Installation Notes.txt"; \
+	 hdiutil create -volname "$(APP_NAME)" \
+	     -srcfolder "$$WORK" -ov -format UDZO -quiet "$$FINAL"; \
+	 rm -rf "$$WORK"; \
+	 echo ""; \
+	 echo "DMG ready: $$FINAL"

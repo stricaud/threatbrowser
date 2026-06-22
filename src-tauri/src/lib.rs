@@ -59,22 +59,38 @@ fn port_in_use(port: u16) -> bool {
     std::net::TcpStream::connect(("127.0.0.1", port)).is_ok()
 }
 
+fn playwright_browsers_path() -> PathBuf {
+    // Playwright stores browsers in ~/Library/Caches/ms-playwright by default on macOS.
+    // When running from a PyInstaller bundle the driver would otherwise look inside the
+    // temp extraction dir (_MEIPASS/playwright/driver/package/.local-browsers/) which
+    // never contains any browser executables.
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home).join("Library/Caches/ms-playwright")
+}
+
 fn spawn_server(resources: &PathBuf, data: &PathBuf) -> Option<Child> {
     if port_in_use(7474) {
         return None; // already running
     }
 
-    // In release builds, prefer the self-contained PyInstaller binary
-    // bundled alongside this executable in Contents/MacOS/.
+    let pw_path = playwright_browsers_path();
+
+    // In release builds, prefer the self-contained PyInstaller binary bundled
+    // alongside this executable in Contents/MacOS/.
+    // Guard against the placeholder script (< 1 MB) being mistaken for the real binary.
     #[cfg(not(debug_assertions))]
     {
         let bin = std::env::current_exe().ok()
             .and_then(|e| e.parent().map(|d| d.join("threatbrowser-server")));
-        if let Some(b) = bin.filter(|p| p.exists()) {
+        let real_bin = bin.filter(|p| {
+            p.metadata().map(|m| m.len() > 1_000_000).unwrap_or(false)
+        });
+        if let Some(b) = real_bin {
             return Command::new(&b)
-                .env("TB_DB",      data.join("threatbrowser.db"))
-                .env("TB_CACHE",   data.join("cache"))
-                .env("TB_CONTENT", data.join("content"))
+                .env("TB_DB",                    data.join("threatbrowser.db"))
+                .env("TB_CACHE",                 data.join("cache"))
+                .env("TB_CONTENT",               data.join("content"))
+                .env("PLAYWRIGHT_BROWSERS_PATH", &pw_path)
                 .spawn()
                 .ok();
         }
@@ -83,10 +99,11 @@ fn spawn_server(resources: &PathBuf, data: &PathBuf) -> Option<Child> {
     // Development fallback: launch the bare Python source tree.
     Command::new(find_python())
         .arg(resources.join("app.py"))
-        .env("TB_DB",      data.join("threatbrowser.db"))
-        .env("TB_CACHE",   data.join("cache"))
-        .env("TB_CONTENT", data.join("content"))
-        .env("TB_STATIC",  resources.join("static"))
+        .env("TB_DB",                    data.join("threatbrowser.db"))
+        .env("TB_CACHE",                 data.join("cache"))
+        .env("TB_CONTENT",               data.join("content"))
+        .env("TB_STATIC",                resources.join("static"))
+        .env("PLAYWRIGHT_BROWSERS_PATH", &pw_path)
         .spawn()
         .ok()
 }

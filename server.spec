@@ -1,4 +1,4 @@
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 block_cipher = None
 
@@ -24,7 +24,7 @@ a = Analysis(
     ['app.py'],
     pathex=['.'],
     binaries=[],
-    datas=[('static', 'static')],
+    datas=[('static', 'static')] + collect_data_files('certifi'),
     hiddenimports=hidden,
     hookspath=[],
     hooksconfig={},
