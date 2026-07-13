@@ -59,6 +59,42 @@ fn port_in_use(port: u16) -> bool {
     std::net::TcpStream::connect(("127.0.0.1", port)).is_ok()
 }
 
+/// A healthy ThreatBrowser server answers GET / with "200 OK".
+/// Distinguishes our live server from a stale/broken process squatting the port.
+fn server_healthy(port: u16) -> bool {
+    use std::io::{Read, Write};
+    let mut s = match std::net::TcpStream::connect(("127.0.0.1", port)) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    s.set_read_timeout(Some(Duration::from_secs(3))).ok();
+    if s.write_all(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n").is_err() {
+        return false;
+    }
+    let mut buf = [0u8; 64];
+    match s.read(&mut buf) {
+        Ok(n) => buf[..n].windows(7).any(|w| w == b"200 OK\r" || w == b"200 OK\n")
+            || std::str::from_utf8(&buf[..n]).map(|t| t.contains("200")).unwrap_or(false),
+        Err(_) => false,
+    }
+}
+
+/// Kill any process bound to the port (orphaned server from a previous crash/force-quit).
+#[cfg(target_os = "macos")]
+fn kill_orphan_on_port(port: u16) {
+    if let Ok(out) = Command::new("/usr/sbin/lsof")
+        .args(["-ti", &format!("tcp:{port}")])
+        .output()
+    {
+        for pid in String::from_utf8_lossy(&out.stdout).split_whitespace() {
+            let _ = Command::new("/bin/kill").args(["-9", pid]).status();
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn kill_orphan_on_port(_: u16) {}
+
 fn playwright_browsers_path() -> PathBuf {
     // Playwright stores browsers in ~/Library/Caches/ms-playwright by default on macOS.
     // When running from a PyInstaller bundle the driver would otherwise look inside the
@@ -68,12 +104,28 @@ fn playwright_browsers_path() -> PathBuf {
     PathBuf::from(home).join("Library/Caches/ms-playwright")
 }
 
+fn server_tmp_dir(data: &PathBuf) -> PathBuf {
+    // PyInstaller --onefile unpacks into $TMPDIR/_MEIxxxx. macOS periodically deletes
+    // files under /var/folders/.../T/ that have not been touched for a few days, which
+    // silently strips a long-running server of its CA bundle, static/ assets and dylibs.
+    // Unpacking under Application Support instead keeps them for the process's lifetime.
+    let tmp = data.join("tmp");
+    let _ = std::fs::create_dir_all(&tmp);
+    tmp
+}
+
 fn spawn_server(resources: &PathBuf, data: &PathBuf) -> Option<Child> {
     if port_in_use(7474) {
-        return None; // already running
+        if server_healthy(7474) {
+            return None; // a healthy ThreatBrowser server is already running
+        }
+        // Stale/broken process squatting the port — reclaim it.
+        kill_orphan_on_port(7474);
+        thread::sleep(Duration::from_millis(500));
     }
 
     let pw_path = playwright_browsers_path();
+    let tmp_dir = server_tmp_dir(data);
 
     // In release builds, prefer the self-contained PyInstaller binary bundled
     // alongside this executable in Contents/MacOS/.
@@ -87,6 +139,7 @@ fn spawn_server(resources: &PathBuf, data: &PathBuf) -> Option<Child> {
         });
         if let Some(b) = real_bin {
             return Command::new(&b)
+                .env("TMPDIR",                   &tmp_dir)
                 .env("TB_DB",                    data.join("threatbrowser.db"))
                 .env("TB_CACHE",                 data.join("cache"))
                 .env("TB_CONTENT",               data.join("content"))
@@ -99,6 +152,7 @@ fn spawn_server(resources: &PathBuf, data: &PathBuf) -> Option<Child> {
     // Development fallback: launch the bare Python source tree.
     Command::new(find_python())
         .arg(resources.join("app.py"))
+        .env("TMPDIR",                   &tmp_dir)
         .env("TB_DB",                    data.join("threatbrowser.db"))
         .env("TB_CACHE",                 data.join("cache"))
         .env("TB_CONTENT",               data.join("content"))

@@ -383,7 +383,12 @@ td.dt { color:var(--dim); font-size:11px; white-space:nowrap; }
         <button class="btn btn-primary" id="wiz-btn-discover" style="flex-shrink:0;min-width:90px;">Discover</button>
       </div>
       <div id="wiz-url-status" style="min-height:18px;font-size:11px;color:var(--dim);margin-bottom:10px;"></div>
-      <button id="wiz-btn-goto-manual" style="background:none;border:none;color:var(--dim);font-size:11px;cursor:pointer;padding:0;text-decoration:underline;">Configure manually instead</button>
+      <div style="display:flex;gap:14px;">
+        <button id="wiz-btn-goto-manual" style="background:none;border:none;color:var(--dim);font-size:11px;cursor:pointer;padding:0;text-decoration:underline;">Configure manually instead</button>
+        <button id="wiz-btn-import-json" style="background:none;border:none;color:var(--dim);font-size:11px;cursor:pointer;padding:0;text-decoration:underline;">Import from JSON file</button>
+      </div>
+      <div id="wiz-import-status" style="min-height:16px;font-size:11px;color:var(--dim);margin-top:8px;"></div>
+      <input id="wiz-import-file" type="file" accept="application/json,.json" style="display:none;">
       <div class="modal-actions"><button class="btn" id="wiz-btn-cancel-url">Cancel</button></div>
     </div>
 
@@ -523,6 +528,17 @@ td.dt { color:var(--dim); font-size:11px; white-space:nowrap; }
         <button class="btn" id="btn-sync-wl" style="font-size:11px;padding:2px 9px;flex-shrink:0;" title="Download from github.com/MISP/misp-warninglists">Sync</button>
       </div>
       <div id="wl-stats" style="color:var(--dim);font-size:10px;margin-top:5px;"></div>
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <span style="font-size:12px;color:var(--text);">TLS certificates</span>
+          <small style="color:var(--dim);display:block;margin-top:2px;">Rebuild the CA bundle if fetches fail with "Could not find a suitable TLS CA certificate bundle".</small>
+        </div>
+        <button class="btn" id="btn-repair-tls" style="font-size:11px;padding:2px 9px;flex-shrink:0;" title="Rewrite the CA certificate bundle and clear the errors it caused">Repair</button>
+      </div>
+      <div id="tls-stats" style="color:var(--dim);font-size:10px;margin-top:5px;word-break:break-all;"></div>
     </div>
 
   </div>
@@ -684,6 +700,7 @@ td.dt { color:var(--dim); font-size:11px; white-space:nowrap; }
     </div>
     <div id="edit-backfill-status" style="font-size:11px;color:var(--dim);margin-bottom:8px;min-height:16px;"></div>
     <div class="modal-actions">
+      <button class="btn" id="btn-edit-src-export" style="margin-right:auto;" title="Download this feed's full configuration as a JSON file">Export JSON</button>
       <button class="btn" id="btn-edit-src-cancel">Cancel</button>
       <button class="btn btn-primary" id="btn-edit-src-save">Save</button>
     </div>
@@ -1893,6 +1910,36 @@ $('wiz-btn-goto-manual').addEventListener('click', () => {
   wizShow('wiz-step-manual');
 });
 
+// ── Import feeds from a JSON config file ──────────────────────────────────────
+$('wiz-btn-import-json').addEventListener('click', () => $('wiz-import-file').click());
+
+$('wiz-import-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';                       // allow re-selecting the same file
+  if (!file) return;
+  const status = $('wiz-import-status');
+  status.style.color = 'var(--dim)';
+  status.textContent = `Reading ${file.name}…`;
+  try {
+    const payload = JSON.parse(await file.text());
+    const r = await api('POST', '/api/sources/import', payload);
+    status.style.color = r.errors && r.errors.length ? 'var(--orange)' : 'var(--green)';
+    status.textContent = r.summary || 'Imported.';
+    if (r.errors && r.errors.length) {
+      status.textContent += ' — ' + r.errors.map(x => `${x.name}: ${x.error}`).join('; ');
+    }
+    toast(r.summary || 'Feeds imported');
+    await loadSources();
+    updateFetchBtn();
+    if (!r.errors || !r.errors.length) setTimeout(wizClose, 1200);
+  } catch (err) {
+    status.style.color = 'var(--red)';
+    status.textContent = (err instanceof SyntaxError)
+      ? 'Invalid JSON: ' + err.message
+      : 'Import failed: ' + err.message;
+  }
+});
+
 $('wiz-url').addEventListener('keydown', e => { if (e.key === 'Enter') $('wiz-btn-discover').click(); });
 
 $('wiz-btn-discover').addEventListener('click', async () => {
@@ -2029,6 +2076,29 @@ $('btn-sync-wl').addEventListener('click', async () => {
   finally { $('btn-sync-wl').disabled = false; $('btn-sync-wl').textContent = 'Sync'; }
 });
 
+async function loadTLSStats() {
+  try {
+    const t = await api('GET', '/api/tls');
+    $('tls-stats').textContent = t.path
+      ? (t.exists ? `OK — ${t.path} (${(t.bytes/1024).toFixed(0)} KB, ${t.origin})`
+                  : `Missing — ${t.path}. Click Repair.`)
+      : 'No CA bundle loaded — restart ThreatBrowser.';
+  } catch { $('tls-stats').textContent = ''; }
+}
+
+$('btn-repair-tls').addEventListener('click', async () => {
+  $('btn-repair-tls').disabled = true;
+  try {
+    const r = await api('POST', '/api/tls/repair');
+    toast(r.cleared_sources
+      ? `TLS certificates repaired — ${r.cleared_sources} source(s) cleared. Fetch again.`
+      : 'TLS certificates repaired.');
+    await loadTLSStats();
+    await loadSources();
+  } catch(e) { toast('Repair failed: ' + e.message); }
+  finally { $('btn-repair-tls').disabled = false; }
+});
+
 $('btn-settings').addEventListener('click', async () => {
   const cfg = await api('GET', '/api/settings');
   $('s-content-path').value  = cfg.content_path || '';
@@ -2037,6 +2107,7 @@ $('btn-settings').addEventListener('click', async () => {
   updateNotifPermStatus();
   await loadRules();
   await loadWLStats();
+  await loadTLSStats();
   $('modal-settings').classList.add('open');
 });
 $('btn-settings-cancel').addEventListener('click', () => $('modal-settings').classList.remove('open'));
@@ -2083,6 +2154,23 @@ $('btn-del-src-content').addEventListener('click', () => doDeleteSource(true));
 
 // ── Edit source modal ─────────────────────────────────────────────────────────
 $('btn-edit-src-cancel').addEventListener('click', () => $('modal-edit-src').classList.remove('open'));
+
+$('btn-edit-src-export').addEventListener('click', async () => {
+  const uuid = $('edit-src-uuid').value;
+  const src  = S.sources.find(s => s.uuid === uuid);
+  if (!src) return;
+  try {
+    const cfg = await api('GET', `/api/sources/${encodeURIComponent(uuid)}/export`);
+    // Wrap in the same envelope the importer accepts, so it round-trips cleanly.
+    const blob = new Blob([JSON.stringify({ version: 1, sources: [cfg] }, null, 2)],
+                          { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (src.name || 'feed').replace(/[^\w.-]+/g, '_').toLowerCase() + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { toast('Export failed: ' + e.message); }
+});
 
 $('btn-edit-discover').addEventListener('click', async () => {
   const url = $('edit-src-url').value.trim();

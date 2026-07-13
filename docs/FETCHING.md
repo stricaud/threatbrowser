@@ -1,5 +1,8 @@
 # Fetching strategies
 
+> For the JSON schema used to create/import feeds (every config key, with examples),
+> see [FEED_CONFIG.md](FEED_CONFIG.md).
+
 ThreatBrowser fetches content in two distinct phases:
 
 1. **Article discovery** — scanning a source URL to find article links and metadata (title, date)
@@ -167,6 +170,27 @@ If `playwright` is not installed, the two-tier strategy (`requests` → `httpx`)
 pip install playwright
 playwright install chromium
 ```
+
+### "Could not find a suitable TLS CA certificate bundle"
+
+Seen as a fetch error on every source at once, pointing at a path like
+`/var/folders/.../T/_MEIejcVr4/certifi/cacert.pem`.
+
+The packaged server is a PyInstaller `--onefile` binary, which unpacks its data files into
+`$TMPDIR/_MEIxxxx`. macOS periodically deletes files under `/var/folders/.../T/` that have not
+been accessed for a few days, so a server left running for a week loses the CA bundle certifi
+still points at, and every HTTPS request fails.
+
+Three things prevent this now:
+
+- `certs.install()` (see [certs.py](../certs.py)) copies the bundle out of the temp dir into
+  `<data dir>/certs/cacert.pem` at startup and repoints certifi, requests, httpx and curl_cffi
+  at that copy. It also keeps the bytes in memory, so the file can be recreated even after the
+  temp dir is gone.
+- The Tauri launcher sets `TMPDIR` to `<data dir>/tmp`, so `_MEIxxxx` itself is no longer
+  unpacked anywhere macOS purges.
+- A fetch that still hits the error triggers `certs.repair()` and retries once. If it persists,
+  **Settings → TLS certificates → Repair** rewrites the bundle and clears the errors it caused.
 
 ---
 

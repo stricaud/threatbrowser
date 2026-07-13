@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 import concurrent.futures
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional, Union
 from urllib.parse import urljoin
 
 import feedparser
@@ -28,6 +28,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import certs
 import db
 import fetcher
 
@@ -44,6 +45,10 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 FAVICON_DIR = os.path.join(CACHE_DIR, "favicons")
 os.makedirs(FAVICON_DIR, exist_ok=True)
+
+# Copy the CA bundle out of the PyInstaller temp dir before any HTTPS happens —
+# macOS purges that dir under a long-running server. See certs.py.
+certs.install()
 
 FETCH_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
@@ -110,6 +115,7 @@ def _try_record_fetch_error(source_uuid: str, error: str | None) -> None:
 
 
 def _run_fetch(source_uuids: list[str] | None = None):
+    certs.ensure()
     sources = db.get_sources(active_only=True)
     if source_uuids:
         sources = [s for s in sources if s["uuid"] in source_uuids]
@@ -128,7 +134,13 @@ def _run_fetch(source_uuids: list[str] | None = None):
         known = None
         if source.get("scraper") == "html" and cfg.get("paginate"):
             known = db.get_source_article_urls(source["id"])
-        articles = fetcher.fetch_source(source, known_urls=known)
+        try:
+            articles = fetcher.fetch_source(source, known_urls=known)
+        except Exception as exc:
+            if not certs.is_ca_bundle_error(exc):
+                raise
+            certs.repair()  # bundle vanished mid-run — rebuild it and try once more
+            articles = fetcher.fetch_source(source, known_urls=known)
         new = db.upsert_articles(articles)
         db.update_source_fetched(source["uuid"], datetime.now(timezone.utc).isoformat())
         return len(articles), new
@@ -155,7 +167,7 @@ def _run_fetch(source_uuids: list[str] | None = None):
                 _try_record_fetch_error(src["uuid"], None)
             except Exception as exc:
                 log.error("Error %s: %s", src["name"], exc)
-                _try_record_fetch_error(src["uuid"], str(exc))
+                _try_record_fetch_error(src["uuid"], certs.describe_error(exc))
                 with _job_lock:
                     _job.errors += 1
             finally:
@@ -186,6 +198,7 @@ def _run_fetch(source_uuids: list[str] | None = None):
 
 def _run_prefetch(source_uuids: list[str] | None = None):
     """Download and cache article content for all uncached articles."""
+    certs.ensure()
     conn = db.get_conn()
     if source_uuids:
         placeholders = ",".join("?" * len(source_uuids))
@@ -910,6 +923,29 @@ class SourceCreate(BaseModel):
     tags: list[str] = []
 
 
+class SourceImportItem(BaseModel):
+    """A single feed definition loaded from a JSON config file.
+
+    Only name and url are required; everything else has a sensible default,
+    so a minimal config is valid and a full config exposes every setting.
+    """
+    name: str
+    url: str
+    scraper: str = "rss"          # rss | html | sitemap
+    config: dict = {}             # scraper-specific settings (see docs/FEED_CONFIG.md)
+    tags: list[str] = []
+    active: bool = True
+
+
+# Fields that round-trip through export/import. Internal columns
+# (id, uuid, last_fetched, last_fetch_error, article_count, is_pseudo) are stripped.
+_EXPORT_FIELDS = ("name", "url", "scraper", "config", "tags", "active")
+
+
+def _export_source(src: dict) -> dict:
+    return {k: src.get(k) for k in _EXPORT_FIELDS}
+
+
 class SourcePatch(BaseModel):
     active: Optional[bool] = None
     name: Optional[str] = None
@@ -942,6 +978,82 @@ def add_source(body: SourceCreate):
         raise HTTPException(409, "URL already exists in another source")
     except Exception as exc:
         raise HTTPException(400, str(exc))
+
+
+@app.get("/api/sources/export")
+def export_sources(uuids: str = Query("", description="Comma-separated source UUIDs; empty = all real sources")):
+    """Export feed configurations as JSON. Suitable for editing and re-importing."""
+    wanted = {u for u in uuids.split(",") if u} if uuids else None
+    sources = db.get_sources()
+    out = [
+        _export_source(s)
+        for s in sources
+        if not s.get("is_pseudo") and (wanted is None or s["uuid"] in wanted)
+    ]
+    return {"version": 1, "sources": out}
+
+
+@app.post("/api/sources/import")
+def import_sources(payload: Union[SourceImportItem, List[SourceImportItem], dict]):
+    """Create (or update) feeds from a JSON config.
+
+    Accepts any of:
+      - a single feed object:       {"name": ..., "url": ...}
+      - a bare list of feeds:       [ {...}, {...} ]
+      - an export envelope:         {"version": 1, "sources": [ {...} ]}
+
+    A feed whose URL already exists is updated in place (upsert); others are created.
+    """
+    # Normalise the three accepted shapes into a list of SourceImportItem.
+    if isinstance(payload, dict) and "sources" in payload:
+        try:
+            items = [SourceImportItem(**s) for s in payload["sources"]]
+        except Exception as exc:
+            raise HTTPException(400, f"Invalid 'sources' entry: {exc}")
+    elif isinstance(payload, SourceImportItem):
+        items = [payload]
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        raise HTTPException(400, "Expected a feed object, a list of feeds, or {\"sources\": [...]}.")
+
+    if not items:
+        raise HTTPException(400, "No feeds found in payload.")
+
+    existing = {s["url"]: s for s in db.get_sources()}
+    created, updated, errors = [], [], []
+    for it in items:
+        try:
+            if it.url in existing:
+                db.update_source(
+                    existing[it.url]["uuid"],
+                    name=it.name, scraper=it.scraper,
+                    config=it.config, tags=it.tags, active=it.active,
+                )
+                updated.append(it.name)
+            else:
+                row = db.add_source(it.name, it.url, it.scraper, it.config, it.tags)
+                if not it.active:
+                    db.update_source(row["uuid"], active=False)
+                created.append(it.name)
+        except Exception as exc:
+            errors.append({"name": it.name, "url": it.url, "error": str(exc)})
+
+    return {
+        "ok": not errors,
+        "created": created,
+        "updated": updated,
+        "errors": errors,
+        "summary": f"{len(created)} created, {len(updated)} updated, {len(errors)} failed",
+    }
+
+
+@app.get("/api/sources/{source_uuid}/export")
+def export_source(source_uuid: str):
+    src = next((s for s in db.get_sources() if s["uuid"] == source_uuid), None)
+    if not src:
+        raise HTTPException(404, "Source not found")
+    return _export_source(src)
 
 
 @app.get("/api/source-tags")
@@ -1381,6 +1493,30 @@ def patch_settings(body: SettingsPatch):
         if val is not None:
             db.set_setting(key, val)
     return db.get_all_settings()
+
+
+# ── TLS certificate bundle ────────────────────────────────────────────────────
+
+@app.get("/api/tls")
+def tls_status():
+    return certs.status()
+
+
+@app.post("/api/tls/repair")
+def tls_repair():
+    """Rewrite the CA bundle and clear the CA errors it caused on every source."""
+    try:
+        info = certs.repair()
+    except Exception as exc:
+        raise HTTPException(500, f"Repair failed: {exc}")
+
+    cleared = 0
+    for src in db.get_sources():
+        err = src.get("last_fetch_error")
+        if err and certs.is_ca_bundle_error(Exception(err)):
+            _try_record_fetch_error(src["uuid"], None)
+            cleared += 1
+    return {**info, "cleared_sources": cleared}
 
 
 # ── Warning lists ─────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ block_cipher = None
 
 # Collect all sub-packages for the async frameworks so nothing is missed
 hidden = []
-for pkg in ['uvicorn', 'anyio', 'starlette', 'fastapi']:
+for pkg in ['uvicorn', 'anyio', 'starlette', 'fastapi', 'curl_cffi']:
     hidden += collect_submodules(pkg)
 
 hidden += [
@@ -15,16 +15,26 @@ hidden += [
     'sniffio', 'h11',
     'multipart', 'python_multipart',
     'httpx',
-    'curl_cffi', 'curl_cffi.requests',
     'pymisp',
-    'brotli',
+    # Response decompression backends advertised by urllib3 in Accept-Encoding.
+    # If a backend is importable but its lib is missing, decompression of a
+    # server response fails with "incorrect header check" / Brotli errors.
+    'brotli', 'brotlicffi',
+    'zstandard', 'zstd',
+    'socks',  # PySocks, occasionally pulled in by requests
 ]
+
+# Data files: CA cert bundles (certifi + curl_cffi each ship their own) and
+# curl_cffi's compiled libcurl/cacert. Missing these is the #1 cause of
+# "Could not find a suitable TLS CA certificate bundle" in a frozen build.
+extra_datas = collect_data_files('certifi')
+extra_datas += collect_data_files('curl_cffi')
 
 a = Analysis(
     ['app.py'],
     pathex=['.'],
     binaries=[],
-    datas=[('static', 'static')] + collect_data_files('certifi'),
+    datas=[('static', 'static')] + extra_datas,
     hiddenimports=hidden,
     hookspath=[],
     hooksconfig={},
