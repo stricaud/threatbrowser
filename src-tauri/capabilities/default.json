@@ -1,0 +1,8 @@
+{
+  "identifier": "default",
+  "description": "ThreatBrowser default capabilities",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}
