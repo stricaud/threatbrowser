@@ -96,7 +96,7 @@
       "scraper": "rss",
       "config": {},
       "tags": [
-        "Devo"
+        ""
       ],
       "active": true
     },
@@ -213,7 +213,7 @@
         "rule_end": "Trending News"
       },
       "tags": [
-        "Devo"
+        ""
       ],
       "active": true
     },
@@ -525,7 +525,7 @@
       "scraper": "rss",
       "config": {},
       "tags": [
-        "Devo"
+        ""
       ],
       "active": true
     },
@@ -667,7 +667,7 @@
       "scraper": "rss",
       "config": {},
       "tags": [
-        "Devo"
+        ""
       ],
       "active": true
     },
