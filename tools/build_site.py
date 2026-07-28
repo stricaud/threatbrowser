@@ -83,7 +83,11 @@ class SourceIndex:
 
 
 def main():
-    repo = sys.argv[1] if len(sys.argv) > 1 else "."
+    repo = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else ".")
+    # db.py / fetcher.py live in the repo root, but this script lives in tools/,
+    # so sys.path[0] is tools/. Put the repo root on the path so `import db` works
+    # regardless of how the workflow invokes us.
+    sys.path.insert(0, repo)
     os.chdir(repo)
 
     tmp = tempfile.mkdtemp(prefix="tb_build_")
