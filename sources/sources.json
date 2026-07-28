@@ -95,9 +95,7 @@
       "url": "https://www.bleepingcomputer.com/feed/",
       "scraper": "rss",
       "config": {},
-      "tags": [
-        ""
-      ],
+      "tags": [],
       "active": true
     },
     {
@@ -212,9 +210,7 @@
         "rule_start": "Follow on LinkedIn",
         "rule_end": "Trending News"
       },
-      "tags": [
-        ""
-      ],
+      "tags": [],
       "active": true
     },
     {
@@ -524,9 +520,7 @@
       "url": "https://radar.offseq.com/rss.xml",
       "scraper": "rss",
       "config": {},
-      "tags": [
-        ""
-      ],
+      "tags": [],
       "active": true
     },
     {
@@ -596,9 +590,7 @@
         "date_selector": ".div-block-23 > div:last-child",
         "date_format": "%B %d, %Y"
       },
-      "tags": [
-        "apt"
-      ],
+      "tags": [],
       "active": true
     },
     {
@@ -666,9 +658,7 @@
       "url": "https://feeds.feedburner.com/TheHackersNews",
       "scraper": "rss",
       "config": {},
-      "tags": [
-        ""
-      ],
+      "tags": [],
       "active": true
     },
     {

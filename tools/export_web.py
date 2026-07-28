@@ -51,7 +51,10 @@ def export_sources(conn, dest_path):
             "url": r["url"],
             "scraper": r["scraper"],
             "config": json.loads(r["config"] or "{}"),
-            "tags": json.loads(r["tags"] or "[]"),
+            # Tags are intentionally NOT published — they are the user's private
+            # categorization. In the hosted build each user assigns their own tags
+            # locally (browser localStorage); nothing tag-related ships to Pages.
+            "tags": [],
             "active": bool(r["active"]),
         })
     doc = {"version": 1, "sources": sources}
