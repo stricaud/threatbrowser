@@ -98,12 +98,22 @@ def main():
     import db
     import fetcher
     db.init_db()
+    # init_db() seeds a default source set into an empty DB. The hosted build is
+    # driven entirely by sources/*.json, so start from a clean slate — no articles
+    # exist yet, so nothing cascades.
+    _c = sqlite3.connect(os.environ["TB_DB"]); _c.execute("DELETE FROM sources"); _c.commit(); _c.close()
 
     feeds = load_source_configs(repo)
     print(f"Loaded {len(feeds)} source definitions from sources/")
 
     url_to_id = {}
+    dupes = 0
     for f in feeds:
+        if not f.get("url"):
+            continue
+        if f["url"] in url_to_id:   # same feed URL in two config files — first wins
+            dupes += 1
+            continue
         row = db.add_source(
             f["name"], f["url"], f.get("scraper", "rss"),
             f.get("config") or {}, f.get("tags") or [],
@@ -111,6 +121,8 @@ def main():
         url_to_id[f["url"]] = row["id"]
         if not f.get("active", True):
             db.update_source(row["uuid"], active=False)
+    if dupes:
+        print(f"Skipped {dupes} duplicate source URL(s) across sources/*.json")
 
     seeded = seed_prior_articles(os.environ["TB_DB"], SourceIndex(os.environ["TB_DB"]))
     print(f"Seeded {seeded} prior articles (accumulated history)")
