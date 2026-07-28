@@ -8,10 +8,16 @@ on:
     branches: [main]
     paths:
       - "sources/**"            # editing a source triggers an immediate rebuild
+      - "static/**"             # UI changes (copied into web/ by build_site)
       - "tools/**"
       - "web/**"
       - ".github/workflows/update.yml"
-  workflow_dispatch: {}          # manual "Run workflow" button
+  workflow_dispatch:             # manual "Run workflow" button
+    inputs:
+      source:
+        description: "Fetch only sources matching this text (name or URL substring; comma-separated). Empty = all."
+        required: false
+        default: ""
 
 permissions:
   contents: write                # commit refreshed web/data back to the repo
@@ -43,6 +49,8 @@ jobs:
           python -c "import playwright" 2>/dev/null && python -m playwright install --with-deps chromium || echo "Playwright not installed; skipping (rss/html/sitemap still fetch)"
 
       - name: Fetch sources and rebuild web/data
+        env:
+          TB_ONLY: ${{ github.event.inputs.source }}
         run: python tools/build_site.py .
 
       - name: Commit refreshed data

@@ -128,6 +128,17 @@ def main():
     print(f"Seeded {seeded} prior articles (accumulated history)")
 
     active = [s for s in db.get_sources(active_only=True)]
+    # TB_ONLY=<comma-separated substrings> fetches just the matching sources (by
+    # name or URL) — for adding/debugging one feed without re-fetching all of them.
+    # Prior articles for every source were already seeded above, so the others'
+    # history is preserved in the export; only the matched sources are re-fetched.
+    only = os.environ.get("TB_ONLY", "").strip()
+    if only:
+        needles = [n.strip().lower() for n in only.split(",") if n.strip()]
+        active = [s for s in active
+                  if any(n in s["name"].lower() or n in s["url"].lower() for n in needles)]
+        print(f"TB_ONLY={only!r} → fetching {len(active)} matching source(s): "
+              f"{', '.join(s['name'] for s in active) or '(none matched)'}")
     print(f"Fetching {len(active)} active sources…")
 
     def _one(src):

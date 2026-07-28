@@ -109,10 +109,14 @@ td.dt { color:var(--dim); font-size:11px; white-space:nowrap; }
 #empty .empty-chip .x { cursor:pointer; color:var(--dim); border-radius:50%; width:14px; height:14px; display:inline-flex; align-items:center; justify-content:center; }
 #empty .empty-chip .x:hover { background:var(--red); color:#fff; }
 
-/* Hosted (static) mode: hide controls that require the Python backend. */
-body.tb-static .src-edit,
+/* Hosted (static) mode: hide controls that require the Python backend. The ✎
+   button stays (it opens a read-only config viewer); delete/backfill/save/etc. go. */
 body.tb-static .src-del,
-body.tb-static .src-dates { display:none !important; }
+body.tb-static .src-dates,
+body.tb-static #btn-edit-discover,
+body.tb-static #btn-edit-src-backfill,
+body.tb-static #btn-edit-src-save,
+body.tb-static #btn-edit-src-export { display:none !important; }
 
 /* ── Active-filters popover ── */
 .af-row { display:flex; align-items:center; gap:8px; font-size:11px; }
@@ -293,6 +297,8 @@ body.tb-static .src-dates { display:none !important; }
   </div>
   <span id="ar-countdown" style="font-size:10px;color:var(--dim);white-space:nowrap;"></span>
   <button class="btn btn-primary" id="btn-fetch">Fetch All</button>
+  <button class="btn" id="btn-refresh-static" style="display:none;" title="Reload the latest data published by GitHub Actions">↻ Refresh</button>
+  <span id="tb-updated" style="display:none;font-size:10px;color:var(--dim);white-space:nowrap;"></span>
   <button class="btn" id="btn-prefetch" title="Download article content for offline use">⬇ Download</button>
   <button class="btn" id="btn-prefetch-log" style="display:none;color:var(--orange);border-color:var(--orange);font-size:11px;padding:3px 9px;" title="View download errors">⚠ 0 failed</button>
   <button class="btn" id="btn-sync" style="display:none;">Sync Scenarios</button>
@@ -580,6 +586,9 @@ body.tb-static .src-dates { display:none !important; }
 <div class="modal-bg" id="modal-edit-src">
   <div class="modal" style="width:480px;">
     <h2>Edit source</h2>
+    <div id="edit-src-static-note" style="display:none;font-size:11px;color:var(--dim);background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:7px 9px;margin-bottom:10px;line-height:1.5;">
+      Read-only view. Sources are defined in the repository — <a href="#" target="_blank" rel="noopener" style="color:var(--blue);">edit <code>sources/sources.json</code> on GitHub ↗</a> to change them. Tags you add here stay private to this browser.
+    </div>
     <input type="hidden" id="edit-src-uuid">
     <div class="field">
       <label>Name</label>
@@ -915,6 +924,8 @@ async function _tbLoadData() {
     fetch('data/sources.json').then(r => r.json()),
   ]);
   _tb.sources = srcs.sources || [];
+  _tb.generatedAt = arts.generated_at || '';
+  _tb.counts = {}; _tb.byId = {};   // reset so Refresh recomputes rather than doubles
   (arts.articles || []).forEach(a => { _tb.counts[a.s] = (_tb.counts[a.s] || 0) + 1; });
   _tb.articles = (arts.articles || []).map(a => {
     const rec = {
@@ -944,7 +955,8 @@ function _tbFilterArticles(q) {
   const limit = parseInt(q.get('limit') || '500', 10);
   const offset = parseInt(q.get('offset') || '0', 10);
 
-  const tags = {}; _tb.sources.forEach(s => tags[s.id] = s.tags || []);
+  const ut = _tbLS.userTags();   // noisy is decided by the user's own (local) tags
+  const tags = {}; _tb.sources.forEach(s => tags[s.id] = [...(s.tags || []), ...(ut[s.id] || [])]);
   const isNoisy = a => (tags[a.source_uuid] || []).includes('noisy');
 
   let out = _tb.articles.filter(a => {
@@ -1013,6 +1025,33 @@ async function _tbShim(method, path, body) {
   if (method === 'GET' && /^\/api\/articles\/[^/]+\/scenarios$/.test(p)) return { scenarios: [] };
 
   throw new Error('This action needs the desktop app — the hosted version is read-only.');
+}
+
+function _tbSetUpdated() {
+  const el = $('tb-updated');
+  if (!el || !_tb.generatedAt) return;
+  const d = new Date(_tb.generatedAt);
+  el.textContent = 'updated ' + (isNaN(d) ? _tb.generatedAt : d.toLocaleString());
+  el.title = 'Data is rebuilt by GitHub Actions on a schedule — this browser cannot fetch feeds directly';
+  el.style.display = '';
+}
+
+// In hosted mode the edit modal is a read-only inspector: you can see a source's
+// full config, but changing it means editing sources/sources.json in the repo.
+function _tbMakeEditModalReadOnly() {
+  $('modal-edit-src').querySelectorAll('input, select, textarea').forEach(el => { el.disabled = true; });
+  const note = $('edit-src-static-note');
+  if (!note) return;
+  const a = note.querySelector('a');
+  const user = location.hostname.split('.')[0];                       // stricaud.github.io
+  const repo = location.pathname.split('/').filter(Boolean)[0] || ''; // /threatbrowser/
+  if (location.hostname.endsWith('github.io') && user && repo) {
+    a.href = `https://github.com/${user}/${repo}/edit/main/sources/sources.json`;
+    a.style.display = '';
+  } else {
+    a.style.display = 'none';   // e.g. local preview — can't derive the repo
+  }
+  note.style.display = '';      // always show the read-only message
 }
 
 async function api(method, path, body) {
@@ -1233,6 +1272,7 @@ function renderSources() {
         $('edit-download-ua-custom').style.display = '';
         $('edit-download-ua-custom').value = ua;
       }
+      if (TB.mode === 'static') _tbMakeEditModalReadOnly();
       $('modal-edit-src').classList.add('open');
     });
   });
@@ -3063,6 +3103,18 @@ async function bootstrap() {
     _tbLS.activeTags().forEach(t => S.activeTags.add(t));  // restore remembered tag filter
     ['btn-fetch', 'btn-prefetch', 'btn-prefetch-log', 'btn-sync', 'btn-add-src', 'btn-sync-wl', 'btn-repair-tls']
       .forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+    // "Fetch All" makes no sense with no backend — offer a data Refresh + a
+    // last-updated stamp so it's clear the feed is rebuilt server-side.
+    _tbSetUpdated();
+    const rb = $('btn-refresh-static');
+    if (rb) {
+      rb.style.display = '';
+      rb.addEventListener('click', async () => {
+        rb.disabled = true; rb.textContent = '↻ …';
+        await _tbLoadData(); await loadSources(); await loadArticles(); await loadStats(); _tbSetUpdated();
+        rb.disabled = false; rb.textContent = '↻ Refresh';
+      });
+    }
   }
   await init();
 }
