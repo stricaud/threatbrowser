@@ -1,0 +1,15 @@
+threatbrowser.db
+threatbrowser.db-shm
+threatbrowser.db-wal
+cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+_build_id                     # build-id stamp written by `make build-server`
+src-tauri/target/
+src-tauri/binaries/
+.DS_Store

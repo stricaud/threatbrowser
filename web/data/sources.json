@@ -1,0 +1,783 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "1a98bebf-16a0-52e2-a6e5-dba3ff9376be",
+      "name": "ANY.RUN Malware",
+      "url": "https://any.run/cybersecurity-blog/category/malware-analysis/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "67f5723a-6531-5da7-9506-e00582a9d7ef",
+      "name": "AhnLab ASEC APT",
+      "url": "https://asec.ahnlab.com/en/category/apt-en/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "6cde50fc-3f03-5d8b-a481-464af41e5570",
+      "name": "AhnLab ASEC CERT",
+      "url": "https://asec.ahnlab.com/en/category/cert-en/feed",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "5bc3e89c-1458-53a8-a632-454a56b92ef9",
+      "name": "AhnLab ASEC Phishing",
+      "url": "https://asec.ahnlab.com/en/category/phishing-scam-en/feed",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "85b2c34e-eaeb-54b8-aeaf-bbb40d2e21b2",
+      "name": "AhnLab ASEC Trend",
+      "url": "https://asec.ahnlab.com/en/category/trend-en/feed",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "deefbde0-025c-52c6-8f4e-e629e788a8bb",
+      "name": "Akamai Security",
+      "url": "https://feeds.feedburner.com/akamai/blog",
+      "scraper": "rss",
+      "config": {
+        "filter_url_contains": "akamai.com/blog/security",
+        "block_detect": "Access Denied"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "55d836ec-0eb6-5841-84c6-b4e97183fb67",
+      "name": "Avast",
+      "url": "https://blog.avast.com/rss.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "810af99a-21c9-5d17-8ced-7624714fc2e4",
+      "name": "Binary Defense",
+      "url": "https://binarydefense.com/sitemaps-1-section-resources-1-sitemap.xml",
+      "scraper": "sitemap",
+      "config": {
+        "filter_url_contains": "/resources/blog/"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "a5c307d5-1b46-5dc4-a01d-cac346bb1a24",
+      "name": "Bitdefender Labs",
+      "url": "https://www.bitdefender.com/en-us/blog/labs/sitemap.xml",
+      "scraper": "sitemap",
+      "config": {
+        "date_selector": "p[style*='757575']"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "e0fe070a-ba90-52d9-95c4-e47e04f36303",
+      "name": "BleepingComputer",
+      "url": "https://www.bleepingcomputer.com/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [
+        "Devo"
+      ],
+      "active": true
+    },
+    {
+      "id": "06abf0eb-d1ab-5b26-bffd-d1afd4253702",
+      "name": "CERT-UA",
+      "url": "https://cert.gov.ua/api/articles/rss",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "9a40f2d1-0ff6-5a9d-8417-2629f886b60a",
+      "name": "CERT.lv",
+      "url": "https://cert.lv/en/feed/rss/all",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "b29f4cae-cd0c-53a0-9a77-55fa73a5197f",
+      "name": "CERT.pl",
+      "url": "https://cert.pl/en/rss.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "a36acaf7-830e-56e7-ae67-bfe860cbaab4",
+      "name": "CERT.se",
+      "url": "https://www.cert.se/feed.rss",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "1f1e0169-4d1d-5df3-aeb1-2e14afc8466a",
+      "name": "CERT.si",
+      "url": "https://www.cert.si/en/category/news/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "f2142da6-5d31-5f36-98fe-0137d401138a",
+      "name": "CIRT Bangladesh",
+      "url": "https://www.cirt.gov.bd/news",
+      "scraper": "html",
+      "config": {
+        "link_selector": "a[href^='/news/']",
+        "link_prefix": "https://www.cirt.gov.bd",
+        "paginate": true,
+        "next_selector": "li.pager__item--next a, li.pager-next a, a[rel='next']",
+        "max_pages": 20,
+        "card_date_selector": "span.date",
+        "card_date_format": "%d-%b-%Y %H:%M:%S"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "a38a8cb6-e22d-5d1c-8620-204f136ce88c",
+      "name": "CISA Advisories",
+      "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "254ae1aa-a29f-5c02-a243-b007d578e953",
+      "name": "Checkpoint Research",
+      "url": "https://research.checkpoint.com/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "cd3dae13-6386-50d9-9ec6-429b1bc20fdf",
+      "name": "Cloudflare Security",
+      "url": "https://blog.cloudflare.com/tag/security/rss",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "31a628ea-c215-5c1e-b8f7-a764e91ba287",
+      "name": "CrowdStrike Counter-Adversary",
+      "url": "https://www.crowdstrike.com/en-us/blog/category/counter-adversary-operations/",
+      "scraper": "html",
+      "config": {
+        "container_selector": "dl.vertical_dropdown_list dd",
+        "link_selector": "a",
+        "title_selector": "div.title",
+        "link_prefix": "https://www.crowdstrike.com"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "cb737070-bf82-5265-bee8-701739e936b9",
+      "name": "Cybersecurity News",
+      "url": "https://cybersecuritynews.com/feed/",
+      "scraper": "rss",
+      "config": {
+        "rule_start": "Follow on LinkedIn",
+        "rule_end": "Trending News"
+      },
+      "tags": [
+        "Devo"
+      ],
+      "active": true
+    },
+    {
+      "id": "651d768e-ee5f-5f7d-abcc-5f41e2abdae7",
+      "name": "DFIR Report",
+      "url": "https://thedfirreport.com/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "1d0fb554-da97-5f1d-9790-f78b28df613a",
+      "name": "Dr.Web",
+      "url": "https://news.drweb.com/rss/get/?c=9",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "12af0bed-818d-546e-b31d-575c392bb0e4",
+      "name": "EclecticIQ",
+      "url": "https://blog.eclecticiq.com/rss.xml",
+      "scraper": "rss",
+      "config": {
+        "container_selector": "div.relative.flex.flex-col.items-start",
+        "link_selector": "a",
+        "title_selector": "h3",
+        "link_prefix": "https://www.eclecticiq.com"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "44d628f3-ff86-5cc7-95ff-c4a72afb5a2e",
+      "name": "Elastic Security Labs",
+      "url": "https://www.elastic.co/security-labs/rss/feed.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "ca0b96fe-d1cb-53f2-bde2-fee24936bf5c",
+      "name": "Field Effect",
+      "url": "https://fieldeffect.com/blog/rss.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "e8f6f8e3-0b34-5ed9-8dc2-1d19efeb26f0",
+      "name": "Forcepoint X-Labs",
+      "url": "https://www.forcepoint.com/blog/x-labs",
+      "scraper": "html",
+      "config": {
+        "link_selector": "a[href^=\"/blog/x-labs/\"]",
+        "link_prefix": "https://www.forcepoint.com",
+        "exclude_url": "https://www.forcepoint.com/blog/x-labs/x-labs",
+        "title_from_url": true
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "23c184fd-e51c-5726-b6bf-b1d3674b88a3",
+      "name": "Genians",
+      "url": "https://www.genians.co.kr/blog/threat_intelligence/rss.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "df58b985-ed49-5cb0-bcbb-62da10140bce",
+      "name": "Google Project Zero",
+      "url": "https://googleprojectzero.blogspot.com/feeds/posts/default?alt=rss",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "14488b4a-9005-5d6d-aa8a-e3b515c3ed26",
+      "name": "Google TAG",
+      "url": "https://blog.google/security/rss",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "5577e6c7-73c0-515d-9f83-e20841027758",
+      "name": "Group-IB",
+      "url": "https://blog.group-ib.com/rss.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "bb573ff0-4c6e-5346-b498-0fe931ba5b65",
+      "name": "HarfangLab",
+      "url": "https://harfanglab.io/insidethelab/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "dd5b4b30-8ff5-5f54-a9eb-477a6971b1ce",
+      "name": "Hexacorn",
+      "url": "http://www.hexacorn.com/blog/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "02ac0b6f-5d71-5078-9f67-35e02c04ecd1",
+      "name": "Hunt.io",
+      "url": "https://hunt.io/blog",
+      "scraper": "html",
+      "config": {
+        "link_selector": "h2 a",
+        "link_prefix": "https://hunt.io"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "186ecccd-fa7e-54a6-b4d0-bb70bb108a09",
+      "name": "Huntress",
+      "url": "https://www.huntress.com/blog/rss.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "d948ed6f-99cc-5621-b011-278c08b8746f",
+      "name": "IC3",
+      "url": "https://www.ic3.gov/CSA/rss",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "a744a513-a8ec-5459-bb56-6eacbc6a1e31",
+      "name": "Infostealers",
+      "url": "https://www.infostealers.com/info-stealers-reports/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "0f380bb9-f817-55aa-b502-3f13baad2747",
+      "name": "Intrinsec",
+      "url": "https://www.intrinsec.com/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "3c4f03ae-526a-5e08-97cf-49810949eeb5",
+      "name": "Israel Gov",
+      "url": "https://www.gov.il/he/api/PublicationApi/rss/4bcc13f5-fed6-4b8c-b8ee-7bf4a6bc81c8",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "88be403b-802a-545e-a33b-0aafd9f82af5",
+      "name": "JPCERT Blog",
+      "url": "https://www.jpcert.or.jp/english/update.html",
+      "scraper": "html",
+      "config": {
+        "link_selector": "table.table_list td a, ul.list a",
+        "link_prefix": "https://www.jpcert.or.jp",
+        "filter_url_regex": "/en/\\d{4}/"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "f633b400-5331-568a-b284-ccf2dc0f4dc5",
+      "name": "JPCERT CC",
+      "url": "https://blogs.jpcert.or.jp/en/atom.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "9a536c32-c1ea-58c9-9abc-f7c92e377523",
+      "name": "Krebs on Security",
+      "url": "https://krebsonsecurity.com/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "f3f8f8ae-24a6-5a6a-8af8-78eb9a8cc307",
+      "name": "MalwareTech",
+      "url": "https://www.malwaretech.com/feed",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "2c4aba8b-636a-5e0e-b15a-486e1f84af12",
+      "name": "Malwarebytes",
+      "url": "https://www.malwarebytes.com/blog/feed/index.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "a6fed39c-7bbe-59c2-8157-cf05d0b39d74",
+      "name": "McAfee Labs",
+      "url": "https://www.mcafee.com/blogs/other-blogs/mcafee-labs/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "b8997658-51e6-5713-928e-661803127334",
+      "name": "Microsoft Security Blog",
+      "url": "https://www.microsoft.com/en-us/security/blog/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "378379d7-f91d-5190-80f7-0038487d26bb",
+      "name": "Microsoft Threat Intel",
+      "url": "https://www.microsoft.com/en-us/security/blog/topic/threat-intelligence/feed",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "f732a6de-fe73-55d9-8b15-8a3dd966b3be",
+      "name": "NCSC.nl",
+      "url": "https://feeds.english.ncsc.nl/news.rss",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "9035a346-f9c0-5ce7-9981-8ecfa4ac67bb",
+      "name": "NIST Cybersecurity",
+      "url": "https://www.nist.gov/blogs/cybersecurity-insights/rss.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "03424c3f-5d6c-5957-a8b7-581000cfa3bf",
+      "name": "Outpost24",
+      "url": "https://outpost24.com/blog/category/research-and-threat-intel/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "a2b6aa1b-df83-5463-bead-94bd71cdd843",
+      "name": "Proofpoint Threat Insight",
+      "url": "https://www.proofpoint.com/us/blog/threat-insight",
+      "scraper": "html",
+      "config": {
+        "container_selector": "div.blog-mosaic__item",
+        "link_selector": "a.blog-mosaic__link",
+        "title_selector": "div.blog-mosaic__title",
+        "link_prefix": "https://www.proofpoint.com"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "c674752c-3e4c-5d20-b0b7-97958a6db0e0",
+      "name": "Qualys Threat Research",
+      "url": "https://blog.qualys.com/vulnerabilities-threat-research/feed",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "22d04ba7-3c84-51ec-b72b-7abc3fc87bc1",
+      "name": "Radar - Latest Security Threats",
+      "url": "https://radar.offseq.com/rss.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [
+        "Devo"
+      ],
+      "active": true
+    },
+    {
+      "id": "c397ed32-f94c-5598-80a1-fe2ff65f31d7",
+      "name": "Red Canary",
+      "url": "https://www.redcanary.co/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "9e3cdfce-f145-5f42-9d58-50cd879cff82",
+      "name": "ReversingLabs",
+      "url": "https://www.reversinglabs.com/blog/tag/threat-research",
+      "scraper": "html",
+      "config": {
+        "link_selector": "div.blog__listing-item article.blog__item h3 a",
+        "link_prefix": "https://www.reversinglabs.com"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "4002f96b-9fe5-59b3-9d63-8c041fbb89ce",
+      "name": "SANS ISC",
+      "url": "https://isc.sans.edu/rssfeed.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "dbcc890c-99dd-5e97-844d-128f67e27aca",
+      "name": "Securelist APT",
+      "url": "https://securelist.com/threat-category/apt-targeted-attacks/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "74df57eb-fcff-5098-9062-373a106c3e1d",
+      "name": "Security Affairs APT",
+      "url": "https://securityaffairs.com/category/apt/feed",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "016b6f14-5e62-5f85-b17b-2bef07f4bd34",
+      "name": "SecurityWeek",
+      "url": "https://www.securityweek.com/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "285fc7d0-2d2b-5773-aa9e-1d2dd3d57d81",
+      "name": "Sekoia",
+      "url": "https://www.sekoia.com/sitemap.xml",
+      "scraper": "sitemap",
+      "config": {
+        "filter_url_regex": "sekoia\\.com/blog/[a-z0-9][a-z0-9-]+$",
+        "date_selector": ".div-block-23 > div:last-child",
+        "date_format": "%B %d, %Y"
+      },
+      "tags": [
+        "apt"
+      ],
+      "active": true
+    },
+    {
+      "id": "b99a5ce8-e7e9-5284-b5d5-db2ba49edb60",
+      "name": "SentinelOne Labs",
+      "url": "https://www.sentinelone.com/labs/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "ed7a496e-95e4-554a-b618-a362737d026f",
+      "name": "Sophos",
+      "url": "https://news.sophos.com/en-us/category/threat-research/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "f0a888d7-9a28-52d3-af78-0cc252fb8753",
+      "name": "SpecterOps",
+      "url": "https://specterops.io/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "ffd2f16d-268f-53b0-8402-537ed2f77363",
+      "name": "Splunk Security",
+      "url": "https://www.splunk.com/en_us/blog/author/secmrkt-research.html",
+      "scraper": "html",
+      "config": {
+        "link_selector": "div.item a",
+        "filter_url_contains": "splunk.com/en_us/blog/"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "16529a89-6792-591d-acd6-694102fcb686",
+      "name": "Symantec/Broadcom",
+      "url": "https://sed-cms.broadcom.com/rss/v1/blogs/rss.xml",
+      "scraper": "rss",
+      "config": {
+        "filter_url_contains": "/threat-intelligence/"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "996d4492-b39f-558f-899f-3237f56b9881",
+      "name": "Talos Intelligence",
+      "url": "https://blog.talosintelligence.com/rss/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "ae7e67a7-0d37-5485-97df-1cdfc96b9535",
+      "name": "The Hacker News",
+      "url": "https://feeds.feedburner.com/TheHackersNews",
+      "scraper": "rss",
+      "config": {},
+      "tags": [
+        "Devo"
+      ],
+      "active": true
+    },
+    {
+      "id": "9017be06-0923-5709-8623-a378333da69e",
+      "name": "Threat Intel (FeedBurner)",
+      "url": "https://feeds.feedburner.com/threatintelligence/pvexyqv7v0v",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "bb040ece-7c0a-5fa8-90ba-7dadc62fa8e8",
+      "name": "ThreatConnect",
+      "url": "https://threatconnect.com/blog/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "b12d54ec-576a-5465-9824-bb2a49662309",
+      "name": "ThreatPost",
+      "url": "https://threatpost.com/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "3a3aea42-8a31-5495-8785-fcc3e31a6431",
+      "name": "TrendMicro",
+      "url": "http://feeds.trendmicro.com/TrendMicroSimplySecurity",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "b033ba22-7c99-570a-84a2-e2864a9b91f1",
+      "name": "Trustwave SpiderLabs",
+      "url": "https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/rss.xml",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "4a8c3ce3-0e78-50b9-803c-fba7513429f7",
+      "name": "Unit 42",
+      "url": "https://unit42.paloaltonetworks.com/sitemap.xml",
+      "scraper": "sitemap",
+      "config": {
+        "sitemap_pattern": "post-sitemap"
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "09cc5d4f-b189-558e-b138-6d956b8a3eed",
+      "name": "Virus Bulletin",
+      "url": "https://www.virusbulletin.com/rss",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "4c6a39fd-0ee9-5ff0-8690-935011567e47",
+      "name": "Volexity",
+      "url": "https://www.volexity.com/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "0aea4d18-341b-534f-a0f8-988c0ddf48f9",
+      "name": "WeLiveSecurity",
+      "url": "https://www.welivesecurity.com/en/rss/feed/",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "d2a115e5-7790-5801-8127-64aab77a806d",
+      "name": "dmpdump",
+      "url": "https://dmpdump.github.io/",
+      "scraper": "html",
+      "config": {
+        "link_selector": "article h2 a, article h1 a",
+        "link_prefix": "https://dmpdump.github.io",
+        "filter_url_contains": "https://dmpdump.github.io/posts/",
+        "paginate": true,
+        "next_selector": "a.btn-outline-primary[href*='page'], a[rel='next']",
+        "max_pages": 10
+      },
+      "tags": [],
+      "active": true
+    },
+    {
+      "id": "82d423ce-33d4-5b32-8776-e428d6d39ca1",
+      "name": "threat.boutique",
+      "url": "https://threat.boutique/feed/rss",
+      "scraper": "rss",
+      "config": {},
+      "tags": [],
+      "active": true
+    }
+  ]
+}

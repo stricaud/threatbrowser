@@ -1,0 +1,72 @@
+name: Update threat feed
+
+# GitOps for the feed: edit sources/ (or wait for the schedule) → fetch → publish.
+on:
+  schedule:
+    - cron: "17 * * * *"        # hourly, offset to avoid the top-of-hour rush
+  push:
+    branches: [main]
+    paths:
+      - "sources/**"            # editing a source triggers an immediate rebuild
+      - "tools/**"
+      - "web/**"
+      - ".github/workflows/update.yml"
+  workflow_dispatch: {}          # manual "Run workflow" button
+
+permissions:
+  contents: write                # commit refreshed web/data back to the repo
+  pages: write
+  id-token: write
+
+concurrency:
+  group: update-feed
+  cancel-in-progress: false      # never run two fetches at once
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Playwright (JS-heavy sources) is optional in CI; install the browser
+          # only if the driver is present, so a lean requirements.txt still works.
+          python -c "import playwright" 2>/dev/null && python -m playwright install --with-deps chromium || echo "Playwright not installed; skipping (rss/html/sitemap still fetch)"
+
+      - name: Fetch sources and rebuild web/data
+        run: python tools/build_site.py .
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name  "threatbrowser-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add web/data
+          if git diff --cached --quiet; then
+            echo "No data changes."
+          else
+            git commit -m "Update feed data ($(date -u +%Y-%m-%dT%H:%MZ))"
+            git push
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web            # the static site: index + data
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
