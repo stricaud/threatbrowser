@@ -40,6 +40,20 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # When bundled by PyInstaller (--onefile), files are extracted to sys._MEIPASS.
 _HERE = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
+
+
+def _app_version() -> str:
+    """Build identity, stamped into `_build_id` by `make build-server`.
+    Lets the desktop shell recognize its own server vs a stale one. 'dev' when unstamped."""
+    try:
+        with open(os.path.join(_HERE, "_build_id"), encoding="utf-8") as fh:
+            return fh.read().strip() or "dev"
+    except OSError:
+        return os.environ.get("TB_BUILD_ID", "dev")
+
+
+APP_VERSION = _app_version()
+
 CACHE_DIR = os.environ.get("TB_CACHE", os.path.join(_HERE, "cache"))
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -1735,9 +1749,23 @@ app.mount("/static", StaticFiles(directory=_static), name="static")
 
 @app.get("/")
 def root():
-    return FileResponse(os.path.join(_static, "index.html"))
+    # no-store: the single-file UI shell (HTML + inline JS/CSS) must never be
+    # served from the webview's cache after an app update, or the user sees the
+    # old interface against a new server. See the WKWebView caching note.
+    return FileResponse(
+        os.path.join(_static, "index.html"),
+        headers={"Cache-Control": "no-store, must-revalidate"},
+    )
+
+
+@app.get("/api/ping")
+def ping():
+    """Liveness + identity probe. The desktop shell uses this to tell its own
+    freshly-launched server apart from a stale one squatting the port."""
+    return {"app": "threatbrowser", "version": APP_VERSION}
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=7474, reload=False)
+    port = int(os.environ.get("TB_PORT", "7474"))
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)

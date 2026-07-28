@@ -65,6 +65,8 @@ icons: $(SVG)
 build-server:
 	@echo "Installing PyInstaller..."
 	@pip3 install pyinstaller --quiet
+	@echo "Stamping build id..."
+	@printf '%s' "$$(git describe --always --dirty 2>/dev/null || date +%Y%m%d%H%M%S)" > _build_id
 	@echo "Bundling Python server..."
 	@pyinstaller server.spec --distpath dist --workpath /tmp/tb_pyinstaller --clean --noconfirm
 	@TARGET=$$(rustc -vV | sed -n 's/^host: //p'); \
@@ -86,24 +88,27 @@ dev: icons
 	cargo tauri dev
 
 # ── Build the macOS .app bundle and DMG (with installer notes) ───────────────
-# After Tauri builds the raw DMG, we remount it, add INSTALL_NOTES.txt, and
-# repack so the user sees the instructions before dragging to Applications.
+# Tauri already produces a proper installer DMG: it has the "Applications" drag
+# target and the styled window that opens on mount. We must NOT rebuild it from
+# scratch (an earlier `cp -R` + `hdiutil create` dropped that window and mangled
+# the app). Instead, add INSTALL_NOTES.txt *non-destructively*: convert Tauri's
+# DMG to read-write, drop the note file in, and recompress. The app bytes,
+# code signature, Applications symlink and window layout are preserved verbatim.
 build-dmg: icons build-server
 	cargo tauri build
-	@echo "Adding installation notes to DMG..."
+	@echo "Adding installation notes to the Tauri DMG (window preserved)..."
 	@TAURI_DMG=$$(ls $(DMG_OUT)/$(APP_NAME)_*.dmg 2>/dev/null | head -1); \
 	 if [ -z "$$TAURI_DMG" ]; then echo "ERROR: no DMG found in $(DMG_OUT)"; exit 1; fi; \
-	 WORK=/tmp/tb_dmg_work; \
-	 MNT=/tmp/tb_dmg_mount; \
 	 FINAL=$(DMG_OUT)/$(APP_NAME)-install.dmg; \
-	 rm -rf "$$WORK" "$$MNT"; \
-	 mkdir -p "$$WORK" "$$MNT"; \
-	 hdiutil attach "$$TAURI_DMG" -mountpoint "$$MNT" -readonly -nobrowse -quiet; \
-	 cp -R "$$MNT/$(APP_NAME).app" "$$WORK/"; \
+	 RW=/tmp/tb_dmg_rw.dmg; \
+	 MNT=/tmp/tb_dmg_mount; \
+	 rm -f "$$RW"; rm -rf "$$MNT"; mkdir -p "$$MNT"; \
+	 hdiutil convert "$$TAURI_DMG" -format UDRW -o "$$RW" -ov -quiet; \
+	 hdiutil attach "$$RW" -mountpoint "$$MNT" -nobrowse -quiet; \
+	 cp INSTALL_NOTES.txt "$$MNT/Installation Notes.txt" || { echo "ERROR: DMG has no room for notes"; hdiutil detach "$$MNT" -quiet; exit 1; }; \
 	 hdiutil detach "$$MNT" -quiet; \
-	 cp INSTALL_NOTES.txt "$$WORK/Installation Notes.txt"; \
-	 hdiutil create -volname "$(APP_NAME)" \
-	     -srcfolder "$$WORK" -ov -format UDZO -quiet "$$FINAL"; \
-	 rm -rf "$$WORK"; \
+	 rm -f "$$FINAL"; \
+	 hdiutil convert "$$RW" -format UDZO -o "$$FINAL" -ov -quiet; \
+	 rm -f "$$RW"; \
 	 echo ""; \
-	 echo "DMG ready: $$FINAL"
+	 echo "DMG ready (drag-to-Applications window intact): $$FINAL"

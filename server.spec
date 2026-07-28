@@ -30,6 +30,12 @@ hidden += [
 extra_datas = collect_data_files('certifi')
 extra_datas += collect_data_files('curl_cffi')
 
+# Build-identity stamp written by `make build-server`; lets the running server
+# report its version via /api/ping. Optional — absent on bare pyinstaller runs.
+import os as _os
+if _os.path.exists('_build_id'):
+    extra_datas += [('_build_id', '.')]
+
 a = Analysis(
     ['app.py'],
     pathex=['.'],

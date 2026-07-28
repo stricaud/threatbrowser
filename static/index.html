@@ -99,7 +99,21 @@ td.dt { color:var(--dim); font-size:11px; white-space:nowrap; }
 .badge.has_scenario::before { background:var(--green); }
 .badge.dl-err { background:rgba(248,81,73,.12); color:var(--red); font-family:var(--mono); }
 .badge.dl-err::before { background:var(--red); }
-#empty { display:none; align-items:center; justify-content:center; height:200px; color:var(--dim); }
+#empty { display:none; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:200px; padding:30px 20px; color:var(--dim); text-align:center; }
+#empty .empty-title { font-size:13px; color:var(--text); }
+#empty .empty-sub { font-size:11px; max-width:440px; line-height:1.5; }
+#empty .empty-chips { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; max-width:480px; }
+#empty .empty-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:2px 6px 2px 9px; border-radius:12px; border:1px solid var(--border); background:var(--bg3); color:var(--text); font-family:var(--mono); }
+#empty .empty-chip b { font-weight:600; color:var(--dim); font-family:var(--sans,inherit); }
+#empty .empty-chip .x { cursor:pointer; color:var(--dim); border-radius:50%; width:14px; height:14px; display:inline-flex; align-items:center; justify-content:center; }
+#empty .empty-chip .x:hover { background:var(--red); color:#fff; }
+
+/* ── Active-filters popover ── */
+.af-row { display:flex; align-items:center; gap:8px; font-size:11px; }
+.af-row .af-k { color:var(--dim); flex-shrink:0; min-width:56px; }
+.af-row .af-v { color:var(--text); font-family:var(--mono); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.af-row .x { cursor:pointer; color:var(--dim); border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; line-height:1; flex-shrink:0; }
+.af-row .x:hover { background:var(--red); color:#fff; }
 
 /* ── Bottom bar ── */
 #bottombar { border-top:1px solid var(--border); background:var(--bg2); padding:6px 12px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
@@ -259,6 +273,18 @@ td.dt { color:var(--dim); font-size:11px; white-space:nowrap; }
   <div class="spacer"></div>
   <span id="stats-bar"></span>
   <span id="filter-count" style="font-size:11px;color:var(--blue);white-space:nowrap;display:none;"></span>
+  <div style="position:relative;">
+    <button class="btn" id="btn-filters" style="display:none;font-size:11px;padding:3px 9px;border-color:var(--blue);color:var(--blue);white-space:nowrap;"
+            title="Show and clear active filters">⚑ <span id="btn-filters-n">0</span> applied</button>
+    <div id="filters-popup" style="display:none;position:fixed;top:0;left:0;z-index:50;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;width:280px;max-width:calc(100vw - 16px);box-shadow:0 4px 16px rgba(0,0,0,.4);">
+      <div style="color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;">Active filters</div>
+      <div id="filters-popup-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:11px;"></div>
+      <div style="display:flex;gap:6px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:10px;">
+        <button class="btn" id="filters-popup-cancel" style="font-size:11px;">Cancel</button>
+        <button class="btn btn-primary" id="filters-popup-clear" style="font-size:11px;">Clear all filters</button>
+      </div>
+    </div>
+  </div>
   <span id="ar-countdown" style="font-size:10px;color:var(--dim);white-space:nowrap;"></span>
   <button class="btn btn-primary" id="btn-fetch">Fetch All</button>
   <button class="btn" id="btn-prefetch" title="Download article content for offline use">⬇ Download</button>
@@ -1185,10 +1211,135 @@ function fmtDateFull(pub, seen) {
   return `${label}: ${d.toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' })}`;
 }
 
+// ── Active-filter visibility ──────────────────────────────────────────────────
+const _SINCE_LABEL = { '24h':'last 24 hours', '7d':'last 7 days', '30d':'last 30 days', '6m':'last 6 months', '1y':'last year' };
+const _STATUS_LABEL = { new:'New', seen:'Seen', no_scenario:'No scenario', has_scenario:'Has scenario' };
+
+// Reflect a status/since choice back into the toolbar buttons so the bar and the
+// controls never disagree.
+function _syncStatusTab() {
+  const val = S.filter.dlError ? 'dl_error' : (S.filter.noisy ? 'noisy' : S.filter.status);
+  document.querySelectorAll('#status-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.status === val));
+}
+function _syncSinceBtn() {
+  document.querySelectorAll('.since-btn').forEach(b => b.classList.toggle('active', b.dataset.since === S.filter.since));
+}
+
+// One source of truth for "what is filtering the list right now", used by both the
+// persistent bar and the empty state. Each entry carries its own clear() action.
+function activeFilters() {
+  const f = S.filter, out = [];
+  if (f.dlError)       out.push({ label:'Tab', value:'Errors only',  clear:() => _resetStatus() });
+  else if (f.noisy)    out.push({ label:'Tab', value:'Noisy only',   clear:() => _resetStatus() });
+  else if (f.status && f.status !== 'all')
+                       out.push({ label:'Status', value:_STATUS_LABEL[f.status] || f.status, clear:() => _resetStatus() });
+  if (f.since && f.since !== 'all')
+                       out.push({ label:'Date', value:_SINCE_LABEL[f.since] || f.since, clear:() => _resetSince() });
+  if (f.sourceIds.size)
+                       out.push({ label:'Sources', value:`${f.sourceIds.size} selected`, clear:() => _resetSources() });
+  if (S.activeTags.size)
+                       out.push({ label:'Tags', value:[...S.activeTags].join(', '), clear:() => _resetTags() });
+  if (f.q)             out.push({ label:'Search', value:f.q, clear:() => _resetSearch() });
+  if (f.sourceQ)       out.push({ label:'source:', value:f.sourceQ, clear:() => _resetSearch() });
+  if (f.titleQ)        out.push({ label:'title:', value:f.titleQ, clear:() => _resetSearch() });
+  if (f.urlQ)          out.push({ label:'url:', value:f.urlQ, clear:() => _resetSearch() });
+  if (f.tagQ)          out.push({ label:'tag:', value:f.tagQ, clear:() => _resetSearch() });
+  return out;
+}
+
+function _resetStatus() {
+  S.filter.status = 'all'; S.filter.dlError = false; S.filter.noisy = false;
+  _syncStatusTab(); loadArticles();
+}
+function _resetSince() { S.filter.since = 'all'; _syncSinceBtn(); loadArticles(); }
+function _resetSources() { S.filter.sourceIds.clear(); renderSources(); updateFetchBtn(); loadArticles(); }
+function _resetTags() { S.activeTags.clear(); S.filter.tagQ = ''; renderTagFilter(); renderSources(); loadArticles(); }
+function _resetSearch() {
+  S.filter.q = S.filter.sourceQ = S.filter.titleQ = S.filter.urlQ = S.filter.tagQ = '';
+  $('search').value = ''; $('search-hint').textContent = '';
+  loadArticles();
+}
+function clearAllFilters() {
+  S.filter.status = 'all'; S.filter.dlError = false; S.filter.noisy = false; S.filter.since = 'all';
+  S.filter.sourceIds.clear(); S.activeTags.clear();
+  S.filter.q = S.filter.sourceQ = S.filter.titleQ = S.filter.urlQ = S.filter.tagQ = '';
+  $('search').value = ''; $('search-hint').textContent = '';
+  _syncStatusTab(); _syncSinceBtn(); renderTagFilter(); renderSources(); updateFetchBtn();
+  loadArticles();
+}
+
+// Toolbar button: shows "(N) applied" whenever filters are active. Clicking it
+// opens the popover where each filter can be removed or all cleared at once.
+function renderActiveFilters() {
+  const btn = $('btn-filters');
+  const n = activeFilters().length;
+  if (!n) { btn.style.display = 'none'; closeFiltersPopup(); return; }
+  btn.style.display = '';
+  $('btn-filters-n').textContent = n;
+  // Keep an open popover in sync as filters are removed one by one.
+  if ($('filters-popup').style.display !== 'none') renderFiltersPopup();
+}
+
+function renderFiltersPopup() {
+  const fs = activeFilters();
+  const list = $('filters-popup-list');
+  list.innerHTML = fs.map((f, i) =>
+    `<div class="af-row"><span class="af-k">${esc(f.label)}</span><span class="af-v" title="${esc(f.value)}">${esc(f.value)}</span><span class="x" data-i="${i}" title="Remove this filter">✕</span></div>`
+  ).join('');
+  list.querySelectorAll('.x').forEach(x =>
+    x.addEventListener('click', e => { e.stopPropagation(); fs[+x.dataset.i].clear(); }));
+}
+
+function openFiltersPopup() {
+  renderFiltersPopup();
+  const popup = $('filters-popup');
+  popup.style.display = '';
+  // Position under the button but clamp to the viewport so it's never off-screen —
+  // the toolbar wraps in narrow windows and the button can land near either edge.
+  const r = $('btn-filters').getBoundingClientRect();
+  const w = popup.offsetWidth || 280;
+  const left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+  popup.style.left = left + 'px';
+  popup.style.top  = (r.bottom + 6) + 'px';
+}
+function closeFiltersPopup() { $('filters-popup').style.display = 'none'; }
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+}
+
+// Shown in place of the list when a filter hides everything: name the filters and,
+// when sources are selected, make the "129 exist but 0 shown" gap explicit.
+function renderEmptyState() {
+  const empty = $('empty');
+  const fs = activeFilters();
+  if (!fs.length) { empty.innerHTML = '<div class="empty-title">No articles found.</div>'; return; }
+
+  const selected = S.sources.filter(s => S.filter.sourceIds.has(s.uuid));
+  const held = selected.reduce((n, s) => n + (s.article_count || 0), 0);
+  const one = selected.length === 1;
+  const sub = (selected.length && held > 0)
+    ? `The ${one ? '' : selected.length + ' '}selected source${one ? '' : 's'} ${one ? 'holds' : 'hold'} ${held.toLocaleString()} article${held === 1 ? '' : 's'}, but the filters below hide ${held === 1 ? 'it' : 'them'} all. Remove a filter to see ${held === 1 ? 'it' : 'them'}.`
+    : 'No articles match the filters below. Remove a filter to widen the results.';
+
+  empty.innerHTML =
+    `<div class="empty-title">No articles match the active filters</div>` +
+    `<div class="empty-sub">${sub}</div>` +
+    `<div class="empty-chips">` +
+      fs.map((f, i) => `<span class="empty-chip"><b>${esc(f.label)}</b> ${esc(f.value)} <span class="x" data-i="${i}" title="Remove this filter">✕</span></span>`).join('') +
+    `</div>` +
+    `<button class="btn" id="empty-clear-all" style="font-size:11px;">Clear all filters</button>`;
+
+  empty.querySelectorAll('.empty-chip .x').forEach(x =>
+    x.addEventListener('click', () => fs[+x.dataset.i].clear()));
+  $('empty-clear-all').addEventListener('click', clearAllFilters);
+}
+
 function renderArticles() {
   const tbody = $('tbody');
   const empty = $('empty');
-  if (!S.articles.length) { tbody.innerHTML = ''; empty.style.display = 'flex'; return; }
+  renderActiveFilters();
+  if (!S.articles.length) { tbody.innerHTML = ''; renderEmptyState(); empty.style.display = 'flex'; return; }
   empty.style.display = 'none';
 
   tbody.innerHTML = S.articles.map(a => {
@@ -1264,6 +1415,17 @@ $('chk-all').addEventListener('change', e => {
   renderArticles();
   updateSel();
 });
+
+// ── Active-filters button + popover ───────────────────────────────────────────
+$('btn-filters').addEventListener('click', e => {
+  e.stopPropagation();
+  const visible = $('filters-popup').style.display !== 'none';
+  visible ? closeFiltersPopup() : openFiltersPopup();
+});
+$('filters-popup').addEventListener('click', e => e.stopPropagation());
+$('filters-popup-cancel').addEventListener('click', closeFiltersPopup);
+$('filters-popup-clear').addEventListener('click', () => { clearAllFilters(); closeFiltersPopup(); });
+document.addEventListener('click', () => closeFiltersPopup());
 
 // ── Status tabs ───────────────────────────────────────────────────────────────
 document.querySelectorAll('#status-tabs .tab').forEach(tab => {

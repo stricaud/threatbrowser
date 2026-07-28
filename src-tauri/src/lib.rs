@@ -114,16 +114,13 @@ fn server_tmp_dir(data: &PathBuf) -> PathBuf {
     tmp
 }
 
-fn spawn_server(resources: &PathBuf, data: &PathBuf) -> Option<Child> {
-    if port_in_use(7474) {
-        if server_healthy(7474) {
-            return None; // a healthy ThreatBrowser server is already running
-        }
-        // Stale/broken process squatting the port — reclaim it.
-        kill_orphan_on_port(7474);
-        thread::sleep(Duration::from_millis(500));
-    }
+const PREFERRED_PORT: u16 = 7474;
+// If 7474 can't be reclaimed (some other app truly owns it), fall back rather
+// than fail to launch. The webview is pointed at whichever we win.
+const FALLBACK_PORTS: [u16; 4] = [7475, 7476, 7477, 7478];
 
+/// Launch our bundled server on a specific port. TB_PORT tells app.py where to bind.
+fn spawn_server_on(port: u16, resources: &PathBuf, data: &PathBuf) -> Option<Child> {
     let pw_path = playwright_browsers_path();
     let tmp_dir = server_tmp_dir(data);
 
@@ -139,6 +136,7 @@ fn spawn_server(resources: &PathBuf, data: &PathBuf) -> Option<Child> {
         });
         if let Some(b) = real_bin {
             return Command::new(&b)
+                .env("TB_PORT",                  port.to_string())
                 .env("TMPDIR",                   &tmp_dir)
                 .env("TB_DB",                    data.join("threatbrowser.db"))
                 .env("TB_CACHE",                 data.join("cache"))
@@ -152,6 +150,7 @@ fn spawn_server(resources: &PathBuf, data: &PathBuf) -> Option<Child> {
     // Development fallback: launch the bare Python source tree.
     Command::new(find_python())
         .arg(resources.join("app.py"))
+        .env("TB_PORT",                  port.to_string())
         .env("TMPDIR",                   &tmp_dir)
         .env("TB_DB",                    data.join("threatbrowser.db"))
         .env("TB_CACHE",                 data.join("cache"))
@@ -162,13 +161,42 @@ fn spawn_server(resources: &PathBuf, data: &PathBuf) -> Option<Child> {
         .ok()
 }
 
-fn wait_for_server(port: u16) {
-    for _ in 0..60 {
-        if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
-            return;
+/// Start a server this app *owns*, and return the port it listens on.
+///
+/// The old logic reused any "healthy" server already on 7474 — but a server left
+/// behind by a previous (possibly older) version passes that check, so the app
+/// would silently talk to a stale server serving an outdated UI, and never manage
+/// or kill it. Now we always reclaim the preferred port and launch our own server;
+/// if we can't free it, we fall back to another port instead of failing to start.
+fn start_owned_server(resources: &PathBuf, data: &PathBuf) -> Option<(u16, Child)> {
+    // Reclaim the preferred port from whatever is squatting it — a stale server
+    // from a prior version, a crashed orphan, or a leftover `make run`.
+    if port_in_use(PREFERRED_PORT) {
+        kill_orphan_on_port(PREFERRED_PORT);
+        for _ in 0..30 {
+            if !port_in_use(PREFERRED_PORT) { break; }
+            thread::sleep(Duration::from_millis(100));
         }
-        thread::sleep(Duration::from_millis(500));
     }
+
+    for &port in std::iter::once(&PREFERRED_PORT).chain(FALLBACK_PORTS.iter()) {
+        if port_in_use(port) {
+            continue; // couldn't be freed / owned by something else — try the next
+        }
+        if let Some(child) = spawn_server_on(port, resources, data) {
+            // Confirm *our* server actually came up on this port before committing.
+            for _ in 0..40 {
+                if server_healthy(port) {
+                    return Some((port, child));
+                }
+                thread::sleep(Duration::from_millis(250));
+            }
+            // Didn't come up — drop this child and try the next port.
+            let mut child = child;
+            let _ = child.kill();
+        }
+    }
+    None
 }
 
 // ── Dock badge (macOS) ────────────────────────────────────────────────────────
@@ -217,10 +245,31 @@ pub fn run() {
             let data      = data_dir(is_dev, &resources);
             let db_path   = data.join("threatbrowser.db");
 
-            let child = spawn_server(&resources, &data);
-            *app.state::<Server>().0.lock().unwrap() = child;
-
-            wait_for_server(7474);
+            match start_owned_server(&resources, &data) {
+                Some((port, child)) => {
+                    *app.state::<Server>().0.lock().unwrap() = Some(child);
+                    // Point the webview at the port we actually won. frontendDist is
+                    // baked to 7474 at build time; navigating covers both the fallback
+                    // port case and the first-launch race where the window loads
+                    // before the server has finished booting.
+                    if let Some(win) = app.get_webview_window("main") {
+                        if let Ok(url) = format!("http://localhost:{port}/").parse() {
+                            let _ = win.navigate(url);
+                        }
+                    }
+                }
+                None => {
+                    // Every candidate port was occupied and unreclaimable — show why
+                    // instead of a blank window.
+                    if let Some(win) = app.get_webview_window("main") {
+                        let msg = "data:text/html,<h2>ThreatBrowser%20could%20not%20start%20its%20local%20server</h2>\
+                                   <p>Ports%207474-7478%20are%20all%20in%20use.%20Quit%20whatever%20is%20using%20them,%20then%20reopen%20ThreatBrowser.</p>";
+                        if let Ok(url) = msg.parse() {
+                            let _ = win.navigate(url);
+                        }
+                    }
+                }
+            }
 
             thread::spawn(move || loop {
                 set_dock_badge(new_article_count(&db_path));
