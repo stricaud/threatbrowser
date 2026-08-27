@@ -6,7 +6,7 @@ ICONS_DIR   := src-tauri/icons
 ICONSET     := /tmp/tb.iconset
 DMG_OUT     := src-tauri/target/release/bundle/dmg
 
-.PHONY: run install-deps install-tauri icons build-server dev build-dmg help
+.PHONY: run install-deps check-deps install-tauri icons build-server dev build-dmg help
 
 # ── Help ─────────────────────────────────────────────────────────────────────
 help:
@@ -18,6 +18,7 @@ help:
 	@echo "  make build-dmg      Build the macOS .app bundle and DMG installer"
 	@echo "  make icons          Regenerate app icons from ios/ThreatBrowser-Icon.svg"
 	@echo "  make install-deps   Install Python dependencies (pip)"
+	@echo "  make check-deps     Verify the build interpreter has everything to bundle"
 	@echo "  make install-tauri  Install the Tauri CLI via cargo (one-time)"
 	@echo ""
 	@echo "First-time setup:"
@@ -33,7 +34,18 @@ run:
 
 # ── Install Python dependencies ───────────────────────────────────────────────
 install-deps:
-	pip3 install -r requirements.txt
+	$(PYTHON) -m pip install -r requirements.txt
+
+# ── Verify the build interpreter can actually produce a working bundle ───────
+# Run this on a fresh machine before build-dmg: a missing dep does not fail the
+# PyInstaller build, it only breaks the installed .app at runtime.
+check-deps:
+	@$(PYTHON) -c "import importlib.util as u, sys; \
+	mods=['bs4','certifi','curl_cffi','fastapi','feedparser','html2text','httpx','pydantic','pymisp','requests','uvicorn','PyInstaller']; \
+	missing=[m for m in mods if u.find_spec(m) is None]; \
+	print('interpreter:', sys.executable); \
+	print('MISSING:', ', '.join(missing)) if missing else print('all bundling dependencies present'); \
+	sys.exit(1 if missing else 0)"
 
 # ── Install Tauri CLI (one-time) ──────────────────────────────────────────────
 install-tauri:
@@ -62,13 +74,20 @@ icons: $(SVG)
 # ── Bundle Python + all dependencies into a single executable ────────────────
 # Produces: src-tauri/binaries/threatbrowser-server-{target-triple}
 # This is bundled by Tauri into Contents/MacOS/ so the app works standalone.
+# Everything below runs through `$(PYTHON) -m ...` on purpose. A Mac commonly
+# has several python3 on PATH, and a bare `pip3` / `pyinstaller` can easily
+# belong to different ones — deps land in interpreter A while PyInstaller
+# freezes interpreter B, producing an .app that fails at runtime with
+# ModuleNotFoundError. server.spec re-checks this and hard-fails if it happens.
 build-server:
-	@echo "Installing PyInstaller..."
-	@pip3 install pyinstaller --quiet
+	@echo "Build interpreter: $$($(PYTHON) -c 'import sys; print(sys.executable)')"
+	@echo "Installing dependencies + PyInstaller..."
+	@$(PYTHON) -m pip install -r requirements.txt --quiet
+	@$(PYTHON) -m pip install pyinstaller --quiet
 	@echo "Stamping build id..."
 	@printf '%s' "$$(git describe --always --dirty 2>/dev/null || date +%Y%m%d%H%M%S)" > _build_id
 	@echo "Bundling Python server..."
-	@pyinstaller server.spec --distpath dist --workpath /tmp/tb_pyinstaller --clean --noconfirm
+	@$(PYTHON) -m PyInstaller server.spec --distpath dist --workpath /tmp/tb_pyinstaller --clean --noconfirm
 	@TARGET=$$(rustc -vV | sed -n 's/^host: //p'); \
 	 mkdir -p src-tauri/binaries; \
 	 cp dist/threatbrowser-server src-tauri/binaries/threatbrowser-server-$$TARGET; \

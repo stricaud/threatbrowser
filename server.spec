@@ -1,5 +1,39 @@
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
+# ── Preflight: refuse to build a broken bundle ───────────────────────────────
+# PyInstaller treats an *un-importable* hiddenimport as a warning, not an error:
+# the build succeeds and the .app then dies at runtime with
+# "ModuleNotFoundError: No module named 'feedparser'" — one module at a time.
+# The modules must be installed for the SAME interpreter PyInstaller runs under,
+# which is not necessarily whatever `pip3` points at (a Mac can easily have
+# several python3 on PATH). This check runs inside that exact interpreter.
+import importlib.util as _ilu
+import sys as _sys
+
+REQUIRED_MODULES = [
+    'bs4', 'certifi', 'curl_cffi', 'fastapi', 'feedparser', 'html2text',
+    'httpx', 'pydantic', 'pymisp', 'requests', 'uvicorn',
+]
+
+_missing = [m for m in REQUIRED_MODULES if _ilu.find_spec(m) is None]
+if _missing:
+    raise SystemExit(
+        "\n".join([
+            "",
+            "ERROR: cannot bundle — these modules are missing from the build interpreter:",
+            "    " + ", ".join(_missing),
+            "",
+            "  interpreter: " + _sys.executable,
+            "",
+            "  Install them for THAT interpreter, not just any pip3:",
+            "      " + _sys.executable + " -m pip install -r requirements.txt",
+            "",
+            "  (Building anyway would produce an .app that starts and then fails",
+            "   at runtime with ModuleNotFoundError.)",
+            "",
+        ])
+    )
+
 block_cipher = None
 
 # Collect all sub-packages for the async frameworks so nothing is missed

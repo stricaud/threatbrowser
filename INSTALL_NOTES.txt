@@ -1,0 +1,22 @@
+ThreatBrowser — Installation Notes
+====================================
+
+1. Drag ThreatBrowser.app to your Applications folder.
+
+2. Open Terminal and run:
+
+       playwright install chromium
+
+   This downloads the Chromium headless browser (~100 MB) used by ThreatBrowser
+   to fetch JavaScript-heavy threat intelligence pages. All other feed types
+   (RSS, HTML, sitemap) work without this step.
+
+   If the playwright command is not found, run:
+
+       pip3 install playwright && playwright install chromium
+
+3. Launch ThreatBrowser from your Applications folder or Launchpad.
+
+────────────────────────────────────────────────────────────────────────────────
+Data is stored in:
+  ~/Library/Application Support/ThreatBrowser/

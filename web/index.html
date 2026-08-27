@@ -991,7 +991,10 @@ async function _tbShim(method, path, body) {
       config: s.config || {},
       tags: [...new Set([...(s.tags || []), ...(ut[s.id] || [])])],  // repo tags + user's own
       active: s.active !== false,
-      article_count: _tb.counts[s.id] || 0, last_fetched: null, last_fetch_error: null, is_pseudo: 0,
+      article_count: _tb.counts[s.id] || 0,
+      // "fetched" happens server-side in the Action; report the data's publish
+      // time so sources aren't all flagged "Never fetched" in the browser.
+      last_fetched: _tb.generatedAt || null, last_fetch_error: null, is_pseudo: 0,
     }));
   }
   if (method === 'GET' && p === '/api/articles') return _tbFilterArticles(q);
