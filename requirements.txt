@@ -9,3 +9,6 @@ brotli>=1.0
 httpx[http2]>=0.24
 playwright>=1.40
 curl-cffi>=0.7
+python-multipart>=0.0.9      # FastAPI needs it for file uploads
+pypdf>=5.0
+pillow>=10.0            # pypdf needs it to extract images

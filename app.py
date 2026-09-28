@@ -16,14 +16,14 @@ import feedparser
 import html2text
 import httpx
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 
 try:
     from playwright.sync_api import sync_playwright as _sync_playwright
     _HAS_PLAYWRIGHT = True
 except ImportError:
     _HAS_PLAYWRIGHT = False
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -55,6 +55,10 @@ def _app_version() -> str:
 APP_VERSION = _app_version()
 
 CACHE_DIR = os.environ.get("TB_CACHE", os.path.join(_HERE, "cache"))
+# Uploaded reports and the images taken out of them. Beside the markdown cache
+# because they are the same kind of thing: content this server holds, rather
+# than content it fetches.
+UPLOAD_DIR = os.environ.get("TB_UPLOADS", os.path.join(CACHE_DIR, "uploads"))
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 FAVICON_DIR = os.path.join(CACHE_DIR, "favicons")
@@ -436,6 +440,116 @@ def _extract_date(soup, date_selector: str, date_format: str) -> str | None:
     return _parse_date_text(text, date_format)
 
 
+def _cell_markdown(cell) -> str:
+    """Inline markdown for one table cell.
+
+    Cells carry links and emphasis that matter — an ATT&CK table is mostly
+    links to technique pages — so the cell is converted rather than flattened
+    to text. Newlines become spaces and pipes are escaped, because a GFM row
+    is one line and an unescaped pipe would start a new column."""
+    conv = html2text.HTML2Text()
+    conv.body_width = 0
+    conv.ignore_links = False
+    conv.ignore_images = False
+    conv.unicode_snob = True
+    conv.protect_links = False
+
+    text = conv.handle(cell.decode_contents()).strip()
+    text = re.sub(r"\s*\n+\s*", " ", text)
+    return text.replace("|", "\\|").strip()
+
+
+def _table_to_markdown(table) -> str:
+    """One <table> as a GitHub-flavoured markdown table.
+
+    html2text's own table output glues the <caption> onto the first header
+    cell and leaves ragged rows, so tables are converted here — while the
+    caption and the cell boundaries still exist as elements — and the result is
+    spliced back in afterwards.
+    """
+    rows = []
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["th", "td"], recursive=False) or tr.find_all(["th", "td"])
+        if cells:
+            rows.append((tr, cells))
+    if not rows:
+        return ""
+
+    # A table whose first row is <th> has a real header; otherwise the first
+    # row serves as one, since GFM has no headerless table.
+    first_tr, first_cells = rows[0]
+    has_header = any(c.name == "th" for c in first_cells)
+    header = [_cell_markdown(c) for c in first_cells]
+    body = [[_cell_markdown(c) for c in cells] for _, cells in rows[1:]]
+    if not has_header and not any(header):
+        header = [""] * len(first_cells)
+        body = [[_cell_markdown(c) for c in cells] for _, cells in rows]
+
+    width = max([len(header)] + [len(r) for r in body] or [1])
+
+    def line(cells):
+        padded = (list(cells) + [""] * width)[:width]
+        return "| " + " | ".join(padded) + " |"
+
+    out = [line(header), "|" + "|".join(" --- " for _ in range(width)) + "|"]
+    out.extend(line(r) for r in body)
+
+    caption = table.find("caption")
+    if caption:
+        text = _cell_markdown(caption)
+        if text:
+            # Its own paragraph above the table, where a caption belongs.
+            out.insert(0, "")
+            out.insert(0, text)
+    return "\n".join(out)
+
+
+def _convert_tables(soup) -> list[str]:
+    """Replace every <table> with a placeholder, returning the markdown for each.
+
+    Placeholders rather than inlined markdown: html2text escapes markdown
+    punctuation in text nodes, which would corrupt the pipes. A bare token
+    survives untouched and is substituted back after conversion.
+
+    Innermost tables are converted first, so a nested table has already become
+    markdown text by the time its parent is read."""
+    tables: list[str] = []
+    while True:
+        pending = [t for t in soup.find_all("table") if not t.find("table")]
+        if not pending:
+            break
+        for table in pending:
+            markdown = _table_to_markdown(table)
+            token = f"TBTABLE{len(tables)}ENDTBTABLE"
+            tables.append(markdown)
+            table.replace_with(NavigableString(f"\n\n{token}\n\n"))
+    return tables
+
+
+def _restore_tables(markdown: str, tables: list[str]) -> str:
+    """Put the converted tables back where their placeholders ended up.
+
+    Each is re-wrapped in blank lines: html2text collapses the whitespace
+    around a placeholder, so two adjacent tables would otherwise come back
+    joined on one line, and a table needs to start its own block to parse."""
+    # A nested table became a placeholder sitting inside its parent's cell.
+    # Resolve those first, flattened to one line, since a GFM cell cannot hold
+    # a multi-line table. Inner tables have lower indices, so a single forward
+    # pass resolves any depth.
+    resolved: list[str] = []
+    for index, table in enumerate(tables):
+        for inner in range(index):
+            token = f"TBTABLE{inner}ENDTBTABLE"
+            if token in table:
+                flat = re.sub(r"\s*\n+\s*", " ", resolved[inner]).strip()
+                table = table.replace(token, flat)
+        resolved.append(table)
+
+    for index, table in enumerate(resolved):
+        markdown = markdown.replace(f"TBTABLE{index}ENDTBTABLE", f"\n\n{table}\n\n")
+    return re.sub(r"\n{3,}", "\n\n", markdown)
+
+
 def _download_content(url: str, date_selector: str = "", date_format: str = "",
                       user_agent: str = "", block_detect: list[str] | None = None) -> tuple[str, str | None]:
     """Fetch URL → markdown.  Falls back: requests → httpx/HTTP2 → playwright Chromium."""
@@ -548,6 +662,11 @@ def _download_content(url: str, date_selector: str = "", date_format: str = "",
         if not href.startswith(("http", "mailto:", "#")):
             a["href"] = urljoin(url, href)
 
+    # Tables are converted before html2text sees them: it glues <caption> onto
+    # the first header cell and emits ragged rows, and both are unrecoverable
+    # from the markdown afterwards.
+    tables = _convert_tables(soup)
+
     h = html2text.HTML2Text()
     h.body_width = 0
     h.ignore_links = False
@@ -556,7 +675,7 @@ def _download_content(url: str, date_selector: str = "", date_format: str = "",
     h.skip_internal_links = False
     h.protect_links = False
 
-    return h.handle(str(soup)), extracted_date
+    return _restore_tables(h.handle(str(soup)), tables), extracted_date
 
 
 # ── Source discovery ──────────────────────────────────────────────────────────
@@ -1207,6 +1326,94 @@ def list_articles(
     return {"articles": articles, "total": total}
 
 
+class ArticleCreate(BaseModel):
+    url: str
+    title: Optional[str] = None
+    source_uuid: Optional[str] = None
+    source_name: Optional[str] = None
+    published_at: Optional[str] = None
+
+
+@app.post("/api/articles", status_code=201)
+def add_article(body: ArticleCreate):
+    """Add one article by URL, outside any feed fetch.
+
+    Feeds only carry what is recent, so a report worth reading is often one the
+    fetcher will never see — an older advisory, or a vendor with no feed at
+    all. Without this the only way in is writing to the database directly,
+    which is not possible from another machine, let alone another pod.
+
+    The source is resolved by uuid, then by name, then by matching the URL's
+    host against a source's own host — so a CISA advisory files itself under
+    the CISA feed and inherits its download rules, date selectors and tags."""
+    if not body.url.startswith(("http://", "https://")):
+        raise HTTPException(400, "url must be http(s)")
+
+    existing = next((a for a in db.get_articles(limit=1, url_q=body.url)[0]
+                     if a["url"] == body.url), None)
+    if existing:
+        return {**existing, "created": False}
+
+    sources = db.get_sources()
+    source = None
+    if body.source_uuid:
+        source = next((s for s in sources if s["uuid"] == body.source_uuid), None)
+        if not source:
+            raise HTTPException(404, f"no source with uuid {body.source_uuid}")
+    elif body.source_name:
+        source = next((s for s in sources
+                       if s["name"].lower() == body.source_name.lower()), None)
+        if not source:
+            raise HTTPException(404, f"no source named {body.source_name!r}")
+    else:
+        # Match on the registrable domain, not the host: a vendor's feed almost
+        # always lives on a different subdomain from its articles
+        # (blog.sekoia.io vs www.sekoia.io), so comparing hosts finds nothing.
+        wanted = _registrable(body.url)
+        candidates = [s for s in sources
+                      if not s.get("is_pseudo") and _registrable(s["url"]) == wanted]
+        # Prefer an active source when a vendor has several feeds.
+        source = next((s for s in candidates if s.get("active")), None) \
+            or (candidates[0] if candidates else None)
+        if not source:
+            raise HTTPException(
+                422, f"no source matches {wanted} — pass source_uuid or "
+                     f"source_name, or create a source for it first")
+
+    title = body.title or _urlparse_title(body.url)
+    db.upsert_articles([{
+        "source_id": source["id"],
+        "title": title,
+        "url": body.url,
+        "published_at": body.published_at,
+    }])
+
+    created = next((a for a in db.get_articles(limit=1, url_q=body.url)[0]
+                    if a["url"] == body.url), None)
+    if not created:
+        raise HTTPException(500, "article was not stored")
+    return {**created, "created": True}
+
+
+def _registrable(url: str) -> str:
+    """The last two labels of a URL's host: blog.sekoia.io -> sekoia.io.
+
+    Naive about multi-part suffixes (.co.uk becomes co.uk), which is fine here:
+    it is only ever compared against another host treated the same way."""
+    from urllib.parse import urlparse as _urlparse
+    host = (_urlparse(url).netloc or "").lower().split(":")[0]
+    parts = [p for p in host.split(".") if p]
+    return ".".join(parts[-2:]) if len(parts) >= 2 else host
+
+
+def _urlparse_title(url: str) -> str:
+    """A readable title from the URL's last path segment."""
+    from urllib.parse import urlparse as _urlparse
+    slug = _urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
+    slug = re.sub(r"\.(html?|php|aspx?)$", "", slug)
+    return slug.replace("-", " ").replace("_", " ").strip().title() or url
+
+
 @app.post("/api/articles/bulk-status")
 def bulk_status(body: BulkStatus):
     if body.status not in ("new", "seen", "has_scenario"):
@@ -1216,6 +1423,105 @@ def bulk_status(body: BulkStatus):
 
 
 # ── Article content ───────────────────────────────────────────────────────────
+
+@app.get("/api/articles/{article_uuid}")
+def get_article_meta(article_uuid: str):
+    """One article's metadata, without touching its content.
+
+    Deliberately separate from /content, which downloads from the origin site
+    when nothing is stored. Anything that just needs to know whether an article
+    exists — or whether its text has been fetched yet — must not pay for a
+    download to find out."""
+    article = db.get_article(article_uuid)
+    if not article:
+        raise HTTPException(404, "not found")
+    article.pop("id", None)          # internal cache key, not for clients
+    return {**article, "stored": bool(article.get("cached_at"))}
+
+
+@app.post("/api/articles/upload", status_code=201)
+async def upload_article(request: Request, file: UploadFile = File(...),
+                         title: str = Form(""), published_at: str = Form("")):
+    """Take a PDF and make it an article — the same as one that was fetched.
+
+    A report that arrives as a file is the same thing as one that arrives as a
+    link, so it becomes an article with markdown, images and a source, and
+    everything downstream reads it through /content like any other. It is
+    filed under "Imported PDFs", a pseudo-source nothing scrapes.
+
+    The file's own sha256 is its identity: uploading it twice updates the
+    article rather than making a second one."""
+    import pdfimport
+
+    usable, why = pdfimport.available()
+    if not usable:
+        raise HTTPException(503, why)
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "empty upload")
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(415, "not a PDF — this takes PDFs only")
+
+    digest = hashlib.sha256(data).hexdigest()
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    pdf_path = os.path.join(UPLOAD_DIR, f"{digest}.pdf")
+    if not os.path.exists(pdf_path):
+        with open(pdf_path, "wb") as fh:
+            fh.write(data)
+
+    # Absolute, because whatever reads this markdown is not on this machine —
+    # and the address has to be the one *it* can reach. In a cluster that is
+    # the service name, not whatever the uploader typed: a PDF sent through a
+    # port-forward would otherwise embed 127.0.0.1 and nothing else could
+    # fetch its images.
+    base = (os.environ.get("TB_PUBLIC_URL", "").rstrip("/")
+            or str(request.base_url).rstrip("/"))
+    try:
+        converted = pdfimport.convert(pdf_path, os.path.join(UPLOAD_DIR, digest),
+                                      f"{base}/api/uploads/{digest}")
+    except Exception as exc:                                       # noqa: BLE001
+        log.exception("PDF import failed")
+        raise HTTPException(422, f"could not read that PDF: {exc}")
+
+    article = db.add_uploaded_article(
+        title=title or converted["title"] or file.filename or digest[:12],
+        url=f"{base}/api/uploads/{digest}.pdf",
+        published_at=published_at or converted["published_at"])
+
+    # Straight into the cache: there is nothing to download, and /content
+    # serves what is there.
+    with open(_cache_path(article["id"]), "w", encoding="utf-8") as fh:
+        fh.write(converted["markdown"])
+    db.set_article_cached(article["uuid"])
+    db.set_article_download_status(article["uuid"], 200)
+    db.index_article_content(article["id"], converted["markdown"])
+
+    return {
+        "uuid": article["uuid"],
+        "url": article["url"],
+        "title": article["title"],
+        "source": article.get("source_name"),
+        "pages": converted["pages"],
+        "images": len(converted["images"]),
+        "scanned_pages": converted["scanned_pages"],
+        "markdown_chars": len(converted["markdown"]),
+        "sha256": digest,
+    }
+
+
+@app.get("/api/uploads/{name:path}")
+def uploaded_file(name: str):
+    """An uploaded PDF, or an image taken out of one."""
+    # Nothing but what this server wrote: no traversal, no absolute paths.
+    if name.startswith("/") or ".." in name.split("/"):
+        raise HTTPException(400, "bad name")
+    path = os.path.normpath(os.path.join(UPLOAD_DIR, name))
+    if not path.startswith(os.path.abspath(UPLOAD_DIR) + os.sep) or \
+            not os.path.isfile(path):
+        raise HTTPException(404, "not found")
+    return FileResponse(path)
+
 
 @app.get("/api/articles/{article_uuid}/content")
 def get_content(article_uuid: str, force: bool = False):
@@ -1247,6 +1553,31 @@ def get_content(article_uuid: str, force: bool = False):
             "url": article["url"],
             "cached_at": article.get("cached_at"),
             "from_cache": True,
+            "rule": _effective_rule(),
+        }
+
+    # An uploaded report has nothing to download: its content came from the
+    # file, so a re-read converts that file again rather than fetching the URL
+    # this server itself serves it at.
+    if "/api/uploads/" in (article["url"] or ""):
+        import pdfimport
+
+        digest = os.path.basename(article["url"]).removesuffix(".pdf")
+        pdf_path = os.path.join(UPLOAD_DIR, f"{digest}.pdf")
+        if not os.path.exists(pdf_path):
+            raise HTTPException(410, "the uploaded file is gone — upload it again")
+        base = article["url"].split("/api/uploads/")[0]
+        converted = pdfimport.convert(pdf_path, os.path.join(UPLOAD_DIR, digest),
+                                      f"{base}/api/uploads/{digest}")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(converted["markdown"])
+        db.set_article_cached(article_uuid)
+        db.index_article_content(article["id"], converted["markdown"])
+        return {
+            "markdown": converted["markdown"],
+            "url": article["url"],
+            "cached_at": article.get("cached_at"),
+            "from_cache": False,
             "rule": _effective_rule(),
         }
 

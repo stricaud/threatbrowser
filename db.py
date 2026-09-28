@@ -834,6 +834,68 @@ def get_article(article_uuid: str) -> dict | None:
     return dict(row) if row else None
 
 
+# Reports that arrive as a file rather than a link. A pseudo-source, like the
+# scenario references above: nothing fetches it, because there is nothing to
+# fetch — the article's content was uploaded, not downloaded.
+IMPORTED_PDF_SOURCE_NAME = "Imported PDFs"
+# Not internal://, which the schema migration marks as a pseudo-source, and
+# pseudo-sources are hidden from /api/articles — the imported reports have to
+# be listed, or nothing downstream can find them. Not http:// either, so no
+# fetch ever goes looking for it. active=0 keeps it out of the fetch loop.
+IMPORTED_PDF_SOURCE_URL  = "pdf://imported"
+
+
+def _ensure_upload_source(conn, name: str, url: str) -> int:
+    """The source uploaded reports are filed under. Listed, never fetched."""
+    row = conn.execute("SELECT id, is_pseudo, active FROM sources WHERE url=?",
+                       (url,)).fetchone()
+    if row:
+        if row[1] or row[2]:
+            conn.execute("UPDATE sources SET is_pseudo=0, active=0 WHERE id=?",
+                         (row[0],))
+            conn.commit()
+        return row[0]
+    cur = conn.execute(
+        "INSERT INTO sources (uuid, name, url, scraper, config, active, is_pseudo)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (str(_uuid.uuid4()), name, url, "upload", "{}", 0, 0))
+    conn.commit()
+    return cur.lastrowid
+
+
+def add_uploaded_article(title: str, url: str, published_at: str = "",
+                         source_name: str = "", source_url: str = "") -> dict:
+    """File an uploaded report under its pseudo-source, and return it.
+
+    Uploading the same file twice is not two articles: the URL carries the
+    file's own digest, so the second upload finds the first and updates its
+    title rather than making a duplicate."""
+    conn = get_conn()
+    try:
+        source_id = _ensure_upload_source(
+            conn, source_name or IMPORTED_PDF_SOURCE_NAME,
+            source_url or IMPORTED_PDF_SOURCE_URL)
+        now = datetime.now(timezone.utc).isoformat()
+        row = conn.execute("SELECT uuid FROM articles WHERE url=?", (url,)).fetchone()
+        if row:
+            conn.execute(
+                "UPDATE articles SET title=COALESCE(?, title), source_id=?,"
+                " published_at=COALESCE(?, published_at) WHERE url=?",
+                (title or None, source_id, published_at or None, url))
+            conn.commit()
+            return get_article(row[0])
+
+        article_uuid = str(_uuid.uuid4())
+        conn.execute(
+            "INSERT INTO articles (uuid, source_id, title, url, published_at, first_seen)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (article_uuid, source_id, title, url, published_at or None, now))
+        conn.commit()
+    finally:
+        conn.close()
+    return get_article(article_uuid)
+
+
 def _is_pseudo_source_url(url: str) -> bool:
     if url.startswith("internal://"):
         return True

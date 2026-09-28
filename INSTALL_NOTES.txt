@@ -20,3 +20,24 @@ ThreatBrowser — Installation Notes
 ────────────────────────────────────────────────────────────────────────────────
 Data is stored in:
   ~/Library/Application Support/ThreatBrowser/
+
+PDF import
+----------
+POST /api/articles/upload takes a PDF (multipart, field "file") and makes it an
+article: markdown from its text, its images extracted and served at
+/api/uploads/<sha256>/, filed under the "Imported PDFs" source. That source is
+listed like any other but is never fetched — active=0, and its URL is
+pdf://imported rather than http, so nothing goes looking for it.
+
+Needs, from requirements.txt:
+
+    pypdf, pillow            text and embedded images
+    python-multipart         FastAPI needs it to accept an upload
+
+Optional, and worth having:
+
+    poppler (brew install poppler)
+      pdftotext -layout   keeps columns and tables readable, which pypdf
+                          flattens into interleaved nonsense
+      pdftoppm            renders a page that carries no text at all, so a
+                          scanned report still has something OCR can read
